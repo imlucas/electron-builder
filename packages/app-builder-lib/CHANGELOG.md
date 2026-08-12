@@ -1,5 +1,53 @@
 # app-builder-lib
 
+## 27.0.0-alpha.7
+
+### Minor Changes
+
+- Feat: warn on silently skipped update signature verification and validate `publisherName` against the signing certificate at build time _[`#10056`](https://github.com/electron-userland/electron-builder/pull/10056) [`331afdd`](https://github.com/electron-userland/electron-builder/commit/331afdd30bd59aa0185f7df31b5712e62a5acfbf) [@claude](https://github.com/apps/claude)_
+
+  Two guards around Windows update signature verification:
+  - **electron-updater**: when `app-update.yml` exists but contains no `publisherName`, the updater used to skip signature verification (including custom `verifyUpdateCodeSignature` hooks) completely silently. It now logs a warning explaining that verification was skipped, how to fix it (sign the build so `publisherName` is derived automatically, or set `win.publisherName` explicitly), and that this fail-open behavior is deprecated: electron-builder v28 will treat a missing `publisherName` as a verification failure (fail-closed). The no-`app-update.yml` path (unpackaged/dev mode) stays silent.
+  - **app-builder-lib**: when `publisherName` is explicitly configured and the subject of the local code signing certificate is known, the build now fails with a clear error if none of the configured names match the certificate (same DN-subset/CN matching semantics as the updater's verifier; any one of multiple configured names matching passes, so certificate-rotation setups keep working). This catches signing with the wrong certificate at build time instead of at update time. The check is skipped whenever the actual signing certificate's subject is not genuinely known (custom `sign` hooks, Azure Trusted Signing, PKCS#11 without an extractable certificate, x509 files without a CN), and `publisherName: null` remains a pure opt-out.
+
+- Feat: validate `to` destinations in `extraFiles`/`extraResources` file sets. An absolute `to` path (POSIX, Windows drive-letter, or UNC) or a relative `to` that escapes the build output directory now fails the build with a clear `InvalidConfigurationError` instead of silently copying files outside the package onto the build machine. Relative hops that stay inside the build output directory (e.g. `to: "../Frameworks"` from `Contents/Resources` on macOS) keep working. The error suggests the fpm file-mapping syntax (`"deb": { "fpm": ["src=/abs/dest"] }`) for users who want absolute in-package paths on deb/rpm. _[`#10062`](https://github.com/electron-userland/electron-builder/pull/10062) [`c0b8235`](https://github.com/electron-userland/electron-builder/commit/c0b8235d7f86d90ffe7218765115b6948b180739) [@claude](https://github.com/apps/claude)_
+
+### Patch Changes
+
+- Feat: support fully offline (air-gapped) Electron downloads by picking up a locally seeded `SHASUMS256.txt-<version>` at the Electron cache root and passing it to `@electron/get` as inline checksums, suppressing the mandatory network fetch of `SHASUMS256.txt` that failed air-gapped builds even with a fully seeded cache (#10039) _[`#10046`](https://github.com/electron-userland/electron-builder/pull/10046) [`362a01f`](https://github.com/electron-userland/electron-builder/commit/362a01f802d4c89d4a586c1704ecd81325f7b2de) [@claude](https://github.com/apps/claude)_
+- Fix: allow parentheses in AppImage executable, product, and license file names. Before, product names like `Zoo Design Studio (Staging)` failed AppImage builds with "productFilename contains characters that cannot be safely used in file paths" — a regression from the Go pipeline, which accepted them. After, names containing `(` and `)` build again; parentheses are legal in Linux filenames and inert inside the double-quoted bash strings of the generated AppRun launcher, while genuinely dangerous characters (`$`, backticks, quotes, slashes) remain rejected. _[`#10050`](https://github.com/electron-userland/electron-builder/pull/10050) [`f39edbb`](https://github.com/electron-userland/electron-builder/commit/f39edbbea6b349b51d3569da15377bac8e60fbfd) [@claude](https://github.com/apps/claude)_
+- Fix: validate the resolved installed electron-updater version instead of the declared specifier, fixing false "At least electron-updater 4.0.0" errors for pnpm `catalog:`/`workspace:` specifiers _[`#10019`](https://github.com/electron-userland/electron-builder/pull/10019) [`0fdb4cb`](https://github.com/electron-userland/electron-builder/commit/0fdb4cb4fd08a2adb7a64dce2a0c347b235e8192) [@claude](https://github.com/apps/claude)_
+- Fix: don't mutate shared UpdateInfo.files when applying GitHub safeArtifactName, which leaked the GitHub-safe file name into other publish providers' update metadata _[`#10013`](https://github.com/electron-userland/electron-builder/pull/10013) [`951e177`](https://github.com/electron-userland/electron-builder/commit/951e17796d98a72d0058bf629d1ca492f06e50c5) [@claude](https://github.com/apps/claude)_
+- Fix: prevent infinite recursion in node module collection when a package depends on itself (e.g. `libsql@0.3.19` via `@prisma/adapter-libsql` -> `@libsql/client`), which caused npm-based builds to hang at `searching for node modules` and eventually crash with a JavaScript heap out-of-memory error (#10068) _[`#10070`](https://github.com/electron-userland/electron-builder/pull/10070) [`075efcf`](https://github.com/electron-userland/electron-builder/commit/075efcf2725a733aa25bb115801dee62e85a5594) [@claude](https://github.com/apps/claude)_
+- Security hardening and a migrate-schema fix: _[`#10036`](https://github.com/electron-userland/electron-builder/pull/10036) [`b87a0b7`](https://github.com/electron-userland/electron-builder/commit/b87a0b7a533eef1711e600864f2540dc163176d7) [@mmaietta](https://github.com/mmaietta)_
+  - `builder-util` `removePassword`: redact single-letter/URI secret flags (`security … -k <password>`, `osslsigncode -key <pkcs11-uri?pin-value=…>`) and whitespace-containing secrets in debug logs, and make the `/b … /c` block-redaction regex ReDoS-safe.
+  - `builder-util-runtime` `httpExecutor`: fix the non-functional `maxRedirects` guard (the redirect counter was never advanced), so a redirect loop from a malicious feed/mirror no longer hangs the updater.
+  - `electron-updater` `GitLabProvider`: only forward the GitLab token to the channel-file request when its URL is same-origin as the API host, so an off-host/`http://` `direct_asset_url` in the release JSON cannot exfiltrate the token.
+  - `app-builder-lib`: defense-in-depth hardening — validate `executableName` before interpolating it into the generated Flatpak launcher, contain custom-toolset extraction within the cache dir, and XML-escape MSI file-association `ext`/`description`.
+  - `electron-builder` `migrate-schema`: auto-remove the removed `linux.syncDesktopName` flag.
+
+- Fix: don't bundle workspace node*modules when the app has no production dependencies *[`#10035`](https://github.com/electron-userland/electron-builder/pull/10035) [`f5babad`](https://github.com/electron-userland/electron-builder/commit/f5babad91b1dea5370aa7a28b727b31e6172b6a1) [@claude](https://github.com/apps/claude)\_
+
+  Before: packaging an app that declares zero production dependencies (e.g. everything is bundled by a JS bundler) from inside a monorepo skipped the app's own empty `node_modules`, climbed to the workspace root, and copied the entire hoisted workspace `node_modules` into `app.asar`.
+
+  After: an app with no production dependencies (neither in its `package.json` nor added via `extraMetadata`) bundles no `node_modules` at all — the collection step is skipped with an informational log message.
+
+<details><summary>Updated 5 dependencies</summary>
+
+<small>
+
+[`b87a0b7`](https://github.com/electron-userland/electron-builder/commit/b87a0b7a533eef1711e600864f2540dc163176d7)
+
+</small>
+
+- `builder-util@27.0.0-alpha.7`
+- `builder-util-runtime@10.0.0-alpha.6`
+- `dmg-builder@27.0.0-alpha.7`
+- `electron-builder-squirrel-windows@27.0.0-alpha.7`
+- `electron-publish@27.0.0-alpha.7`
+
+</details>
+
 ## 27.0.0-alpha.6
 
 ### Major Changes
