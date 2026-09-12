@@ -43,6 +43,7 @@ exports[`mac concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-x64.zip",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -52,6 +53,7 @@ exports[`mac concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.zip",
       "safeArtifactName": "Test-Concurrent-1.1.0-arm64.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -60,6 +62,7 @@ exports[`mac concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.zip.blockmap",
       "safeArtifactName": "Test Concurrent-1.1.0-arm64.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -68,9 +71,18 @@ exports[`mac concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-x64.zip.blockmap",
       "safeArtifactName": "Test Concurrent-1.1.0-x64.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test Concurrent-1.1.0-arm64.zip.blockmap3",
+      "safeArtifactName": "Test Concurrent-1.1.0-arm64.zip.blockmap3",
+    },
+    {
+      "file": "Test Concurrent-1.1.0-x64.zip.blockmap3",
+      "safeArtifactName": "Test Concurrent-1.1.0-x64.zip.blockmap3",
     },
   ],
 }
@@ -168,6 +180,7 @@ exports[`mac/win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-x64.zip",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -177,6 +190,7 @@ exports[`mac/win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.zip",
       "safeArtifactName": "Test-Concurrent-1.1.0-arm64.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -185,6 +199,7 @@ exports[`mac/win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.zip.blockmap",
       "safeArtifactName": "Test Concurrent-1.1.0-arm64.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -193,6 +208,7 @@ exports[`mac/win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-x64.zip.blockmap",
       "safeArtifactName": "Test Concurrent-1.1.0-x64.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -203,6 +219,7 @@ exports[`mac/win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -212,6 +229,7 @@ exports[`mac/win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-x64.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -221,6 +239,7 @@ exports[`mac/win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -229,6 +248,7 @@ exports[`mac/win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -237,6 +257,7 @@ exports[`mac/win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-x64.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -245,9 +266,30 @@ exports[`mac/win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test Concurrent-1.1.0-arm64.zip.blockmap3",
+      "safeArtifactName": "Test Concurrent-1.1.0-arm64.zip.blockmap3",
+    },
+    {
+      "file": "Test Concurrent-1.1.0-x64.zip.blockmap3",
+      "safeArtifactName": "Test Concurrent-1.1.0-x64.zip.blockmap3",
+    },
+    {
+      "file": "Test Concurrent-1.1.0-arm64.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe.blockmap3",
+    },
+    {
+      "file": "Test Concurrent-1.1.0-x64.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe.blockmap3",
+    },
+    {
+      "file": "Test Concurrent-1.1.0.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0.exe.blockmap3",
     },
   ],
 }
@@ -473,6 +515,7 @@ exports[`nsis + zip concurrent: elevate.exe reaches win-unpacked but never leaks
       "file": "Test Concurrent-1.1.0-x64.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "isAdminRightsRequired": true,
         "sha512": "@sha512",
         "size": "@size",
@@ -487,10 +530,15 @@ exports[`nsis + zip concurrent: elevate.exe reaches win-unpacked but never leaks
       "file": "Test Concurrent-1.1.0-x64.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "isAdminRightsRequired": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test Concurrent-1.1.0-x64.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe.blockmap3",
     },
   ],
 }
@@ -594,6 +642,7 @@ exports[`win concurrent - all targets 1`] = `
       "file": "Test Concurrent-1.1.0.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -607,6 +656,7 @@ exports[`win concurrent - all targets 1`] = `
       "file": "Test Concurrent-1.1.0-x64.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -626,6 +676,7 @@ exports[`win concurrent - all targets 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -712,6 +763,7 @@ exports[`win concurrent - all targets 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -720,6 +772,7 @@ exports[`win concurrent - all targets 1`] = `
       "file": "Test Concurrent-1.1.0-x64.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -728,9 +781,22 @@ exports[`win concurrent - all targets 1`] = `
       "file": "Test Concurrent-1.1.0.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test Concurrent-1.1.0-arm64.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe.blockmap3",
+    },
+    {
+      "file": "Test Concurrent-1.1.0-x64.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe.blockmap3",
+    },
+    {
+      "file": "Test Concurrent-1.1.0.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0.exe.blockmap3",
     },
     {
       "arch": "x64",
@@ -827,6 +893,7 @@ exports[`win concurrent 1`] = `
       "file": "Test Concurrent-1.1.0.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -836,6 +903,7 @@ exports[`win concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-x64.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -845,6 +913,7 @@ exports[`win concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -853,6 +922,7 @@ exports[`win concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -861,6 +931,7 @@ exports[`win concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-x64.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -869,9 +940,22 @@ exports[`win concurrent 1`] = `
       "file": "Test Concurrent-1.1.0.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test Concurrent-1.1.0-arm64.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe.blockmap3",
+    },
+    {
+      "file": "Test Concurrent-1.1.0-x64.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe.blockmap3",
+    },
+    {
+      "file": "Test Concurrent-1.1.0.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0.exe.blockmap3",
     },
   ],
 }
@@ -906,6 +990,7 @@ exports[`win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -915,6 +1000,7 @@ exports[`win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-x64.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -924,6 +1010,7 @@ exports[`win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.exe",
       "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -932,6 +1019,7 @@ exports[`win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-arm64.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -940,6 +1028,7 @@ exports[`win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0-x64.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -948,9 +1037,22 @@ exports[`win/linux concurrent 1`] = `
       "file": "Test Concurrent-1.1.0.exe.blockmap",
       "safeArtifactName": "Test-Concurrent-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test Concurrent-1.1.0-arm64.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0-arm64.exe.blockmap3",
+    },
+    {
+      "file": "Test Concurrent-1.1.0-x64.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0-x64.exe.blockmap3",
+    },
+    {
+      "file": "Test Concurrent-1.1.0.exe.blockmap3",
+      "safeArtifactName": "Test-Concurrent-1.1.0.exe.blockmap3",
     },
   ],
 }

@@ -130,6 +130,7 @@ exports[`extraDistFiles 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip",
       "safeArtifactName": "TestApp-1.1.0-mac.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -138,9 +139,14 @@ exports[`extraDistFiles 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW-1.1.0-mac.zip.blockmap3",
+      "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap3",
     },
   ],
 }
@@ -203,6 +209,7 @@ exports[`only zip 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip",
       "safeArtifactName": "TestApp-1.1.0-mac.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -211,9 +218,14 @@ exports[`only zip 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW-1.1.0-mac.zip.blockmap3",
+      "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap3",
     },
   ],
 }
@@ -1534,6 +1546,7 @@ exports[`zip preserves .framework symlinks (#9846) 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip",
       "safeArtifactName": "TestApp-1.1.0-mac.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -1542,9 +1555,14 @@ exports[`zip preserves .framework symlinks (#9846) 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW-1.1.0-mac.zip.blockmap3",
+      "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap3",
     },
   ],
 }

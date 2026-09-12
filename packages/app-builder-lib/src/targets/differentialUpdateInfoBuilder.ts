@@ -1,10 +1,11 @@
 import { log } from "builder-util"
-import { BlockMapDataHolder, PackageFileInfo } from "builder-util-runtime"
+import { BLOCK_MAP_V3_FILE_SUFFIX, BlockMapDataHolder, PackageFileInfo } from "builder-util-runtime"
 import * as path from "path"
 import { Target } from "../core.js"
 import { PlatformPackager } from "../platformPackager.js"
 import { ArchiveOptions } from "./archive.js"
 import { BlockMapRegion, buildBlockMap, BuildBlockMapOptions, ChunkerParams } from "./blockmap/blockmap.js"
+import { buildBlockMapV3 } from "./blockmap/blockmapV3.js"
 import { findVerbatimRange } from "./blockmap/verbatimRange.js"
 
 export const BLOCK_MAP_FILE_SUFFIX = ".blockmap"
@@ -23,10 +24,22 @@ export const BLOCK_MAP_FILE_SUFFIX = ".blockmap"
 export const STORED_MEMBER_CHUNKER: ChunkerParams = { min: 4096, avg: 8192, max: 16384 }
 
 /**
+ * `STORED_MEMBER_CHUNKER` counterpart for the v3 block map (`BLOCK_MAP_V3_FILE_SUFFIX`). A v3 map costs
+ * ~10 B per block and an updater fetches only the groups that changed, so the v2 trade-off (a finer
+ * chunker inflating a map that is re-downloaded in full) no longer applies and the stored member can be
+ * chunked at 1/2/4 KiB: a one-line change then costs a couple of blocks plus a few KB of map.
+ * `max` must fit a v3 record's 16-bit block size.
+ */
+export const STORED_MEMBER_CHUNKER_V3: ChunkerParams = { min: 1024, avg: 2048, max: 4096 }
+
+/**
  * Locates each of `memberFiles` (absolute paths of files stored verbatim inside `artifact`) and returns
  * a `STORED_MEMBER_CHUNKER` blockmap region per located file, sorted by offset. A member that cannot be
  * found verbatim is logged at warn and skipped — the blockmap then falls back to the default chunker for
  * those bytes; it never fails the build.
+ *
+ * The returned regions are the v2 regions; `toV3Regions` derives the v3 regions (same byte ranges,
+ * `STORED_MEMBER_CHUNKER_V3`) from them, so both maps are built from the same located ranges.
  */
 export async function locateStoredMemberRegions(artifact: string, memberFiles: Array<string>): Promise<Array<BlockMapRegion>> {
   const regions: Array<BlockMapRegion> = []
@@ -48,6 +61,19 @@ export async function locateStoredMemberRegions(artifact: string, memberFiles: A
 /** `BuildBlockMapOptions` for `regions`, or `undefined` when there are none so the default chunker path is taken unchanged. */
 export function toBlockMapOptions(regions: Array<BlockMapRegion>): BuildBlockMapOptions | undefined {
   return regions.length === 0 ? undefined : { regions }
+}
+
+function isSameChunker(a: ChunkerParams, b: ChunkerParams): boolean {
+  return a.min === b.min && a.avg === b.avg && a.max === b.max
+}
+
+/**
+ * The v3 block map regions for the v2 `regions` (as returned by `locateStoredMemberRegions`): the same
+ * byte ranges, with `STORED_MEMBER_CHUNKER` swapped for `STORED_MEMBER_CHUNKER_V3`. Regions with any
+ * other chunker are kept as they are (a caller that chose its own parameters gets them in both maps).
+ */
+export function toV3Regions(regions: Array<BlockMapRegion> | null | undefined): Array<BlockMapRegion> {
+  return (regions ?? []).map(region => (isSameChunker(region.chunker, STORED_MEMBER_CHUNKER) ? { ...region, chunker: STORED_MEMBER_CHUNKER_V3 } : region))
 }
 
 export function createNsisWebDifferentialUpdateInfo(artifactPath: string, packageFiles: { [arch: string]: PackageFileInfo }) {
@@ -127,5 +153,23 @@ export async function createBlockmap(
     packager,
     updateInfo,
   })
+
+  // The v3 map is an additional artifact (never appended to the v2 file — old updaters gunzip + JSON.parse
+  // that one). It is always built: ~10 B per block, and a v3-capable updater then fetches only the groups
+  // that changed. Emitted without `updateInfo` so it is uploaded like any artifact but does not write
+  // update info; `blockMapV3` on the returned holder reaches the `files[]` entry of latest.yml via the
+  // main artifact's `updateInfo` (see `createUpdateInfo` in publish/updateInfoBuilder.ts).
+  const blockMapV3File = `${file}${BLOCK_MAP_V3_FILE_SUFFIX}`
+  log.info({ blockMapFile: log.filePath(blockMapV3File) }, "building block map v3")
+  const v3 = await buildBlockMapV3(file, blockMapV3File, { regions: toV3Regions(options?.regions) })
+  log.debug({ blockMapFile: log.filePath(blockMapV3File), blocks: v3.blockCount, groups: v3.groupCount }, "built block map v3")
+  await packager.emitArtifactBuildCompleted({
+    file: blockMapV3File,
+    safeArtifactName: safeArtifactName == null ? null : `${safeArtifactName}${BLOCK_MAP_V3_FILE_SUFFIX}`,
+    target,
+    arch: null,
+    packager,
+  })
+  updateInfo.blockMapV3 = true
   return updateInfo
 }

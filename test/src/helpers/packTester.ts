@@ -390,6 +390,7 @@ function getFileTypePriority(file: string): number {
 
     // Metadata and auxiliary files
     ".blockmap",
+    ".blockmap3",
     ".yml",
     ".yaml",
   ]

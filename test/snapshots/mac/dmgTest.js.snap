@@ -8,6 +8,7 @@ exports[`custom background - new way 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip",
       "safeArtifactName": "TestApp-1.1.0-mac.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -16,9 +17,14 @@ exports[`custom background - new way 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW-1.1.0-mac.zip.blockmap3",
+      "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap3",
     },
   ],
 }
@@ -79,6 +85,7 @@ exports[`disable dmg icon (light), bundleVersion 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip",
       "safeArtifactName": "TestApp-1.1.0-mac.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -87,9 +94,14 @@ exports[`disable dmg icon (light), bundleVersion 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW-1.1.0-mac.zip.blockmap3",
+      "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap3",
     },
   ],
 }
@@ -149,6 +161,7 @@ exports[`dmg > app is copyable from mounted dmg and bundle structure is intact 1
       "arch": "x64",
       "file": "DmgCopyTest-1.1.0.dmg",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -156,9 +169,13 @@ exports[`dmg > app is copyable from mounted dmg and bundle structure is intact 1
     {
       "file": "DmgCopyTest-1.1.0.dmg.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "DmgCopyTest-1.1.0.dmg.blockmap3",
     },
   ],
 }
@@ -304,6 +321,7 @@ exports[`dmg > bundleShortVersion 1`] = `
       "arch": "x64",
       "file": "Bundle-ShortVersion-2017.1-alpha5.dmg",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -311,9 +329,13 @@ exports[`dmg > bundleShortVersion 1`] = `
     {
       "file": "Bundle-ShortVersion-2017.1-alpha5.dmg.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Bundle-ShortVersion-2017.1-alpha5.dmg.blockmap3",
     },
   ],
 }
@@ -375,6 +397,7 @@ exports[`dmg > custom background - new way 1`] = `
       "arch": "x64",
       "file": "CustomBackground-1.1.0-mac.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -383,9 +406,14 @@ exports[`dmg > custom background - new way 1`] = `
       "file": "CustomBackground-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "CustomBackground-1.1.0-mac.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "CustomBackground-1.1.0-mac.zip.blockmap3",
+      "safeArtifactName": "CustomBackground-1.1.0-mac.zip.blockmap3",
     },
   ],
 }
@@ -447,6 +475,7 @@ exports[`dmg > disable dmg icon (light), bundleVersion 1`] = `
       "arch": "x64",
       "file": "Disable-Icon-1.1.0-mac.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -455,9 +484,14 @@ exports[`dmg > disable dmg icon (light), bundleVersion 1`] = `
       "file": "Disable-Icon-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "Disable-Icon-1.1.0-mac.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Disable-Icon-1.1.0-mac.zip.blockmap3",
+      "safeArtifactName": "Disable-Icon-1.1.0-mac.zip.blockmap3",
     },
   ],
 }
@@ -519,6 +553,7 @@ exports[`dmg > dmg 1`] = `
       "arch": "x64",
       "file": "Default-Dmg-1.1.0.dmg",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -526,9 +561,13 @@ exports[`dmg > dmg 1`] = `
     {
       "file": "Default-Dmg-1.1.0.dmg.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Default-Dmg-1.1.0.dmg.blockmap3",
     },
   ],
 }
@@ -756,6 +795,7 @@ exports[`dmg > license buttons config 2`] = `
       "arch": "x64",
       "file": "Foo-5-1.1.0.dmg",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -763,9 +803,13 @@ exports[`dmg > license buttons config 2`] = `
     {
       "file": "Foo-5-1.1.0.dmg.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Foo-5-1.1.0.dmg.blockmap3",
     },
   ],
 }
@@ -827,6 +871,7 @@ exports[`dmg > license en 1`] = `
       "arch": "x64",
       "file": "Foo-3-1.1.0.dmg",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -834,9 +879,13 @@ exports[`dmg > license en 1`] = `
     {
       "file": "Foo-3-1.1.0.dmg.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Foo-3-1.1.0.dmg.blockmap3",
     },
   ],
 }
@@ -898,6 +947,7 @@ exports[`dmg > license ja 1`] = `
       "arch": "x64",
       "file": "Foo-2-1.1.0.dmg",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -905,9 +955,13 @@ exports[`dmg > license ja 1`] = `
     {
       "file": "Foo-2-1.1.0.dmg.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Foo-2-1.1.0.dmg.blockmap3",
     },
   ],
 }
@@ -969,6 +1023,7 @@ exports[`dmg > license rtf 1`] = `
       "arch": "x64",
       "file": "Foo-4-1.1.0.dmg",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -976,9 +1031,13 @@ exports[`dmg > license rtf 1`] = `
     {
       "file": "Foo-4-1.1.0.dmg.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Foo-4-1.1.0.dmg.blockmap3",
     },
   ],
 }
@@ -1040,6 +1099,7 @@ exports[`dmg > multi language license 1`] = `
       "arch": "x64",
       "file": "Foo-1-1.1.0.dmg",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -1047,9 +1107,13 @@ exports[`dmg > multi language license 1`] = `
     {
       "file": "Foo-1-1.1.0.dmg.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Foo-1-1.1.0.dmg.blockmap3",
     },
   ],
 }
@@ -1111,6 +1175,7 @@ exports[`dmg > no background 1`] = `
       "arch": "x64",
       "file": "No-Background-1.1.0.dmg",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -1118,9 +1183,13 @@ exports[`dmg > no background 1`] = `
     {
       "file": "No-Background-1.1.0.dmg.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "No-Background-1.1.0.dmg.blockmap3",
     },
   ],
 }
@@ -1200,6 +1269,7 @@ exports[`dmg > no build directory 2`] = `
       "arch": "x64",
       "file": "NoBuildDirectory-1.1.0.dmg",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -1207,9 +1277,13 @@ exports[`dmg > no build directory 2`] = `
     {
       "file": "NoBuildDirectory-1.1.0.dmg.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "NoBuildDirectory-1.1.0.dmg.blockmap3",
     },
   ],
 }
@@ -1271,6 +1345,7 @@ exports[`dmg > retina background as 2 png 1`] = `
       "arch": "x64",
       "file": "RetinaBackground-1.1.0-mac.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -1279,9 +1354,14 @@ exports[`dmg > retina background as 2 png 1`] = `
       "file": "RetinaBackground-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "RetinaBackground-1.1.0-mac.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "RetinaBackground-1.1.0-mac.zip.blockmap3",
+      "safeArtifactName": "RetinaBackground-1.1.0-mac.zip.blockmap3",
     },
   ],
 }
@@ -1343,6 +1423,7 @@ exports[`dmg > unset dmg icon 1`] = `
       "arch": "x64",
       "file": "No_Volume_Icon-1.1.0.dmg",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -1350,9 +1431,13 @@ exports[`dmg > unset dmg icon 1`] = `
     {
       "file": "No_Volume_Icon-1.1.0.dmg.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "No_Volume_Icon-1.1.0.dmg.blockmap3",
     },
   ],
 }
@@ -1415,6 +1500,7 @@ exports[`retina background as 2 png 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip",
       "safeArtifactName": "TestApp-1.1.0-mac.zip",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -1423,9 +1509,14 @@ exports[`retina background as 2 png 1`] = `
       "file": "Test App ßW-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW-1.1.0-mac.zip.blockmap3",
+      "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap3",
     },
   ],
 }

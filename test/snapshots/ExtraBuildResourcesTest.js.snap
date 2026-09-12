@@ -127,6 +127,7 @@ exports[`override targets in the config - only arch 1`] = `
       "arch": "ia32",
       "file": "beta-TestApp.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -134,15 +135,20 @@ exports[`override targets in the config - only arch 1`] = `
     {
       "file": "beta-TestApp.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "beta-TestApp.exe.blockmap3",
     },
     {
       "file": "beta.yml",
       "fileContent": {
         "files": [
           {
+            "blockMapV3": true,
             "sha512": "@sha512",
             "size": "@size",
             "url": "beta-TestApp.exe",
