@@ -7,7 +7,7 @@ import { ProgressInfo, CancellationToken } from "builder-util-runtime"
 import { Logger } from "../types.js"
 import { copyData } from "./DataSplitter.js"
 import { URL } from "url"
-import { computeOperations, Operation, OperationKind } from "./downloadPlanBuilder.js"
+import { coalesceDownloadGaps, computeOperations, Operation, OperationKind } from "./downloadPlanBuilder.js"
 import { checkIsRangesSupported, executeTasksUsingMultipleRangeRequests } from "./multipleRangeDownloader.js"
 import { ProgressDifferentialDownloadCallbackTransform, ProgressDifferentialDownloadInfo } from "./ProgressDifferentialDownloadCallbackTransform.js"
 
@@ -59,7 +59,8 @@ export abstract class DifferentialDownloader {
     }
 
     const logger = this.logger
-    const operations = computeOperations(oldBlockMap, newBlockMap, logger)
+    // download through small COPY gaps: fewer ranges = fewer sequential requests on single-range hosts
+    const operations = coalesceDownloadGaps(computeOperations(oldBlockMap, newBlockMap, logger))
     if (logger.debug != null) {
       logger.debug(JSON.stringify(operations, null, 2))
     }

@@ -1,0 +1,7 @@
+---
+"app-builder-lib": minor
+"electron-updater": minor
+"builder-util-runtime": minor
+---
+
+feat: block map v3 (`<installer>.blockmap3`) — a range-fetchable two-level binary block map published next to the unchanged `.blockmap` so differential updates no longer pay for the whole map on every update. The v3 map is uncompressed with fixed-size tables (header, content-defined groups of blocks with 8-byte group hashes, 10-byte per-block records); electron-updater fetches the header and group table with one `Range` request, matches groups against its cached previous map and fetches only the records of the groups that changed, then runs the existing block-level plan and download pipeline. Because the map cost becomes proportional to the change, the stored `app.asar` region (`nsis.differentialPackage: "store-asar"`, ideally with `asar.contentAlignment`) can use 1–2 KiB blocks in v3 while v2 keeps its default chunking byte-for-byte for older updaters. Older electron-updater versions ignore `.blockmap3`, and a new updater falls back to `.blockmap` whenever the v3 map cannot be fetched or parsed. electron-updater additionally downloads through COPY gaps smaller than 8 KiB between two changed ranges (one request per range on GitHub/S3-class hosts makes re-downloading a few KiB cheaper than an extra request) and caps `multipart/byteranges` requests at 200 ranges (Apache's `MaxRanges` default; larger `Range` headers exceed common 8 KB header limits).
