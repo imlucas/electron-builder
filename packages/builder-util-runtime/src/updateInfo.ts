@@ -25,12 +25,6 @@ export interface BlockMapDataHolder {
   blockMapSize?: number
 
   /**
-   * Whether a range-fetchable block map v3 (`<file>.blockmap3`) is published next to the file.
-   * Updaters that don't know the format ignore it; the v2 `.blockmap` is always published as well.
-   */
-  blockMapV3?: boolean
-
-  /**
    * The file checksum.
    */
   readonly sha512: string
