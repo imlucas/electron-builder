@@ -12,6 +12,8 @@ import {
   ProgressInfo,
   BlockMap,
   retry,
+  decodeBlockMapV3,
+  toBlockMap,
 } from "builder-util-runtime"
 import { randomBytes } from "crypto"
 import { release } from "os"
@@ -35,6 +37,7 @@ import type { AuthInfo } from "electron"
 import { gunzipSync, gzipSync } from "zlib"
 import { DifferentialDownloaderOptions } from "./differentialDownloader/DifferentialDownloader.js"
 import { GenericDifferentialDownloader } from "./differentialDownloader/GenericDifferentialDownloader.js"
+import { fetchBlockMapV3 } from "./differentialDownloader/blockMapV3Fetcher.js"
 import {
   AutoInstallEvent,
   DOWNLOAD_PROGRESS,
@@ -834,9 +837,19 @@ export abstract class AppUpdater extends (EventEmitter as new () => TypedEmitter
         ...updateInfo,
         downloadedFile: updateFile,
       })
-      const currentBlockMapFile = path.join(cacheDir, "current.blockmap")
-      if (await fsExtra.pathExists(currentBlockMapFile)) {
-        await fsExtra.copyFile(currentBlockMapFile, path.join(downloadedUpdateHelper.cacheDir, "current.blockmap"))
+      // promote the block map(s) of the downloaded update to the cache; a differential download writes exactly one of the
+      // two formats, and its stale counterpart from a previous update must not survive (it no longer describes the file the next update starts from)
+      const blockMapFileNames = [CURRENT_BLOCK_MAP_FILE_NAME, CURRENT_BLOCK_MAP_V3_FILE_NAME]
+      const pendingBlockMapFiles = await Promise.all(blockMapFileNames.map(name => fsExtra.pathExists(path.join(cacheDir, name))))
+      if (pendingBlockMapFiles.some(it => it)) {
+        for (let i = 0; i < blockMapFileNames.length; i++) {
+          const cachedBlockMapFile = path.join(downloadedUpdateHelper.cacheDir, blockMapFileNames[i])
+          if (pendingBlockMapFiles[i]) {
+            await fsExtra.copyFile(path.join(cacheDir, blockMapFileNames[i]), cachedBlockMapFile)
+          } else {
+            await fsExtra.remove(cachedBlockMapFile)
+          }
+        }
       }
       return packageFile == null ? [updateFile] : [updateFile, packageFile]
     }
@@ -896,6 +909,9 @@ export abstract class AppUpdater extends (EventEmitter as new () => TypedEmitter
         return true
       }
       const provider = downloadUpdateOptions.updateInfoAndProvider.provider
+      if (fileInfo.info.blockMapV3 === true && (await this.differentialDownloadInstallerV3(fileInfo, downloadUpdateOptions, installerPath, provider, oldInstallerFileName))) {
+        return false
+      }
       const blockmapFileUrls = await provider.getBlockMapFiles(
         fileInfo.url,
         this.app.version,
@@ -972,7 +988,96 @@ export abstract class AppUpdater extends (EventEmitter as new () => TypedEmitter
       return true
     }
   }
+
+  /**
+   * Differential download driven by the range-fetchable block map v3 (`<file>.blockmap3`): the new map is reconstructed from the
+   * cached old map plus Range requests for the changed groups only, then the regular block-level differential download runs on both maps.
+   *
+   * Returns `true` when the installer has been downloaded. On ANY failure (HTTP error, 416, non-206 answer to a Range request, parse or
+   * verification error, download error) it logs a warning and returns `false` so that the caller falls back to the v2 block map path.
+   */
+  private async differentialDownloadInstallerV3(
+    fileInfo: ResolvedUpdateFileInfo,
+    downloadUpdateOptions: DownloadUpdateOptions,
+    installerPath: string,
+    provider: Provider<any>,
+    oldInstallerFileName: string
+  ): Promise<boolean> {
+    try {
+      const blockmapFileUrls = await provider.getBlockMapV3Files(
+        fileInfo.url,
+        this.app.version,
+        downloadUpdateOptions.updateInfoAndProvider.info.version,
+        this.previousBlockmapBaseUrlOverride
+      )
+      this._logger.info(`Download block maps v3 (old: "${blockmapFileUrls[0]}", new: ${blockmapFileUrls[1]})`)
+
+      const fetchBlockMap = (url: URL, oldMap: Buffer | null) =>
+        fetchBlockMapV3({
+          url,
+          oldMap,
+          httpExecutor: this.httpExecutor,
+          requestHeaders: downloadUpdateOptions.requestHeaders,
+          cancellationToken: downloadUpdateOptions.cancellationToken,
+          isUseMultipleRangeRequest: provider.isUseMultipleRangeRequest,
+          logger: this._logger,
+        })
+
+      // get old block map from cache dir first, if not found (or unreadable), download it
+      const cachedBlockMapFile = path.join(this.downloadedUpdateHelper!.cacheDir, CURRENT_BLOCK_MAP_V3_FILE_NAME)
+      let oldBlockMap: Buffer | null = null
+      try {
+        if (await fsExtra.pathExists(cachedBlockMapFile)) {
+          oldBlockMap = await fsExtra.readFile(cachedBlockMapFile)
+          decodeBlockMapV3(oldBlockMap)
+        }
+      } catch (e: any) {
+        this._logger.warn(`Cannot parse blockmap "${cachedBlockMapFile}", error: ${e}`)
+        oldBlockMap = null
+      }
+      if (oldBlockMap == null) {
+        oldBlockMap = (await fetchBlockMap(blockmapFileUrls[0], null)).buffer
+      }
+
+      const newBlockMap = await fetchBlockMap(blockmapFileUrls[1], oldBlockMap)
+      this._logger.info(
+        `Block map v3 reconstructed: ${newBlockMap.wireBytes} bytes in ${newBlockMap.requests} request(s), ${newBlockMap.matchedGroups} group(s) reused, ${newBlockMap.fetchedGroups} fetched`
+      )
+      await fsExtra.outputFile(path.join(this.downloadedUpdateHelper!.cacheDirForPendingUpdate, CURRENT_BLOCK_MAP_V3_FILE_NAME), newBlockMap.buffer)
+
+      const downloadOptions: DifferentialDownloaderOptions = {
+        newUrl: fileInfo.url,
+        oldFile: path.join(this.downloadedUpdateHelper!.cacheDir, oldInstallerFileName),
+        logger: this._logger,
+        newFile: installerPath,
+        isUseMultipleRangeRequest: provider.isUseMultipleRangeRequest,
+        requestHeaders: downloadUpdateOptions.requestHeaders,
+        cancellationToken: downloadUpdateOptions.cancellationToken,
+      }
+      if (this.listenerCount(DOWNLOAD_PROGRESS) > 0) {
+        downloadOptions.onProgress = it => this.emit(DOWNLOAD_PROGRESS, it)
+      }
+
+      await new GenericDifferentialDownloader(fileInfo.info, this.httpExecutor, downloadOptions).download(
+        toBlockMap(decodeBlockMapV3(oldBlockMap)),
+        toBlockMap(decodeBlockMapV3(newBlockMap.buffer))
+      )
+      return true
+    } catch (e: any) {
+      if (e instanceof CancellationError) {
+        throw e
+      }
+      this._logger.warn(`Cannot download differentially using block map v3, falling back to block map v2: ${e.stack || e}`)
+      await fsExtra.remove(path.join(this.downloadedUpdateHelper!.cacheDirForPendingUpdate, CURRENT_BLOCK_MAP_V3_FILE_NAME)).catch(() => {
+        // ignore
+      })
+      return false
+    }
+  }
 }
+
+const CURRENT_BLOCK_MAP_FILE_NAME = "current.blockmap"
+const CURRENT_BLOCK_MAP_V3_FILE_NAME = "current.blockmap3"
 
 export interface DownloadUpdateOptions {
   readonly updateInfoAndProvider: UpdateInfoAndProvider
