@@ -8,6 +8,7 @@ exports[`createDesktopShortcut always 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -17,9 +18,14 @@ exports[`createDesktopShortcut always 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW Setup 1.1.0.exe.blockmap3",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap3",
     },
   ],
 }
@@ -33,6 +39,7 @@ exports[`custom guid 1`] = `
       "file": "boo Hub Setup 1.1.0.exe",
       "safeArtifactName": "boo-Hub-Setup-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -42,9 +49,14 @@ exports[`custom guid 1`] = `
       "file": "boo Hub Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "boo-Hub-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "boo Hub Setup 1.1.0.exe.blockmap3",
+      "safeArtifactName": "boo-Hub-Setup-1.1.0.exe.blockmap3",
     },
   ],
 }
@@ -58,6 +70,7 @@ exports[`custom include 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -117,9 +130,14 @@ exports[`custom include with sibling include and customUnInstall 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW Setup 1.1.0.exe.blockmap3",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap3",
     },
   ],
 }
@@ -133,6 +151,7 @@ exports[`custom script 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -142,9 +161,14 @@ exports[`custom script 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW Setup 1.1.0.exe.blockmap3",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap3",
     },
   ],
 }
@@ -158,6 +182,7 @@ exports[`file associations per user 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -167,9 +192,14 @@ exports[`file associations per user 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW Setup 1.1.0.exe.blockmap3",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap3",
     },
   ],
 }
@@ -183,6 +213,7 @@ exports[`html license 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -192,9 +223,14 @@ exports[`html license 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW Setup 1.1.0.exe.blockmap3",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap3",
     },
   ],
 }
@@ -208,6 +244,7 @@ exports[`menuCategory 1`] = `
       "file": "Test Menu Category CustomName 1.1.0.exe",
       "safeArtifactName": "Test-Menu-Category-CustomName-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -217,9 +254,14 @@ exports[`menuCategory 1`] = `
       "file": "Test Menu Category CustomName 1.1.0.exe.blockmap",
       "safeArtifactName": "Test-Menu-Category-CustomName-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test Menu Category CustomName 1.1.0.exe.blockmap3",
+      "safeArtifactName": "Test-Menu-Category-CustomName-1.1.0.exe.blockmap3",
     },
   ],
 }
@@ -233,6 +275,7 @@ exports[`multi language license 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -242,9 +285,14 @@ exports[`multi language license 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW Setup 1.1.0.exe.blockmap3",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap3",
     },
   ],
 }
@@ -258,6 +306,7 @@ exports[`one-click 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -267,15 +316,21 @@ exports[`one-click 1`] = `
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test App ßW Setup 1.1.0.exe.blockmap3",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap3",
     },
     {
       "file": "latest.yml",
       "fileContent": {
         "files": [
           {
+            "blockMapV3": true,
             "sha512": "@sha512",
             "size": "@size",
             "url": "Test App ßW Setup 1.1.0.exe",
@@ -305,6 +360,7 @@ exports[`perMachine, no run after finish 1`] = `
       "file": "TestApp Setup 1.1.0.exe",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "isAdminRightsRequired": true,
         "sha512": "@sha512",
         "size": "@size",
@@ -315,16 +371,22 @@ exports[`perMachine, no run after finish 1`] = `
       "file": "TestApp Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "isAdminRightsRequired": true,
         "sha512": "@sha512",
         "size": "@size",
       },
     },
     {
+      "file": "TestApp Setup 1.1.0.exe.blockmap3",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap3",
+    },
+    {
       "file": "latest.yml",
       "fileContent": {
         "files": [
           {
+            "blockMapV3": true,
             "isAdminRightsRequired": true,
             "sha512": "@sha512",
             "size": "@size",
@@ -367,6 +429,7 @@ exports[`string menuCategory 1`] = `
       "file": "Test Menu Category ' CustomName 1.1.0.exe",
       "safeArtifactName": "test-menu-category-setup-1.1.0.exe",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
@@ -376,9 +439,14 @@ exports[`string menuCategory 1`] = `
       "file": "Test Menu Category ' CustomName 1.1.0.exe.blockmap",
       "safeArtifactName": "test-menu-category-setup-1.1.0.exe.blockmap",
       "updateInfo": {
+        "blockMapV3": true,
         "sha512": "@sha512",
         "size": "@size",
       },
+    },
+    {
+      "file": "Test Menu Category ' CustomName 1.1.0.exe.blockmap3",
+      "safeArtifactName": "test-menu-category-setup-1.1.0.exe.blockmap3",
     },
   ],
 }

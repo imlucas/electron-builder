@@ -24,10 +24,22 @@
 // header's offset/size, so gaps between files are tolerated.
 //
 // Wire cost model (per update):
-//   download bytes (sum of DOWNLOAD operations from electron-updater's computeOperations)
+//   download bytes (sum of DOWNLOAD operations from electron-updater's computeOperations, after the
+//     updater's gap coalescing — `coalesceDownloadGaps` downloads through COPY gaps < 8 KiB)
 //   + new blockmap (gzipped; electron-updater re-downloads it in full on every update — only the
 //     OLD blockmap is cached locally)
 //   + #DOWNLOAD ranges × BENCH_RANGE_OVERHEAD (multipart range request overhead)
+//
+// Block map v3 rows (`.blockmap3`, builder-util-runtime/src/blockMapV3.ts): the same blocks encoded as
+// a range-fetchable two-level binary map. v2 checksums are base64 of the blake2b-18 digest and a v3
+// block hash is the first 8 bytes of that digest, so the v3 maps are built here straight from the
+// region-chunked v2 output with `encodeBlockMapV3` (block offsets from cumulative sizes, regions = the
+// asar region with the row's chunker). Wire cost of a v3 update:
+//   header + group table (one Range request)
+//   + records of every new group whose (hash, byteLength, blockCount) matches no old group (adjacent
+//     unmatched groups coalesced into one range)
+//   + DOWNLOAD bytes from computeOperations over the full maps, after gap coalescing
+//   + (#map ranges + #data ranges) × BENCH_RANGE_OVERHEAD
 //
 // The 7z package is built with exactly the options NsisTarget.buildAppPackage uses for a
 // differential-aware installer (withoutDir, compression "normal", installTimeDecodable, dictSize 1,
@@ -43,8 +55,8 @@ import { archive, ArchiveOptions } from "app-builder-lib/src/targets/archive"
 import { buildBlockMap, BuildBlockMapOptions, ChunkerParams } from "app-builder-lib/src/targets/blockmap/blockmap"
 import { configureDifferentialAwareArchiveOptions } from "app-builder-lib/src/targets/differentialUpdateInfoBuilder"
 import { dynamicImport } from "app-builder-lib/src/util/dynamicImport"
-import { BlockMap } from "builder-util-runtime"
-import { computeOperations, OperationKind } from "electron-updater/src/differentialDownloader/downloadPlanBuilder"
+import { BlockInput, BlockMap, decodeBlockMapV3, encodeBlockMapV3, GROUP_SIZE, RECORD_SIZE, toBlockMap } from "builder-util-runtime"
+import { coalesceDownloadGaps, computeOperations, Operation, OperationKind } from "electron-updater/src/differentialDownloader/downloadPlanBuilder"
 import { Logger } from "electron-updater/src/types"
 import * as fs from "fs/promises"
 import * as path from "path"
@@ -61,6 +73,10 @@ const ASAR_ALIGN = Number(process.env.BENCH_ASAR_ALIGN ?? 0)
 
 const KiB = 1024
 const DEFAULT_CONFIG_NAME = "default (8/16/32 KiB everywhere)"
+/** electron-builder's default Rabin chunker (blockmap.ts), recorded in the v3 header as the chunker outside regions */
+const DEFAULT_CHUNKER: ChunkerParams = { min: 8 * KiB, avg: 16 * KiB, max: 32 * KiB }
+/** the first v3 request fetches the header + group table; the spec allows one request up to this size before a second is needed */
+const V3_FIRST_REQUEST_BYTES = 64 * KiB
 
 interface SweepConfig {
   name: string
@@ -420,6 +436,8 @@ interface VariantResult {
   offsetsShifted: { shifted: number; total: number }
   stored: Array<Row>
   compressed: Array<Row>
+  /** block map v3 rows for the stored asar, one per sweep config (same blocks as the v2 row of that config) */
+  v3: Array<V3Row>
 }
 
 function overlap(aStart: number, aEnd: number, bStart: number, bEnd: number): number {
@@ -438,8 +456,13 @@ function countBlocksInRange(map: BlockMap, start: number, end: number): number {
   return n
 }
 
+/** electron-updater's plan for a v2-shaped map pair: computeOperations followed by the updater's gap coalescing */
+function planOperations(oldMap: BlockMap, newMap: BlockMap): Array<Operation> {
+  return coalesceDownloadGaps(computeOperations(oldMap, newMap, quietLogger))
+}
+
 function measure(config: string, oldMap: BlockMap, newMap: BlockMap, newPkg: PackageInfo, newMapGzBytes: number): Row {
-  const ops = computeOperations(oldMap, newMap, quietLogger)
+  const ops = planOperations(oldMap, newMap)
   const headerStart = newPkg.asarOffset
   const headerEnd = headerStart + newPkg.asarHeaderBytes
   const asarEnd = headerStart + newPkg.asarSize
@@ -476,6 +499,101 @@ function measure(config: string, oldMap: BlockMap, newMap: BlockMap, newPkg: Pac
   }
 }
 
+// ─── block map v3 ─────────────────────────────────────────────────────────────
+
+interface V3Row {
+  config: string
+  blocksTotal: number
+  groupsTotal: number
+  /** new groups whose (hash, byteLength, blockCount) match no old group → their records are fetched */
+  groupsFetched: number
+  /** full v3 file size (what a fresh install with no cached old map would download) */
+  mapFileBytes: number
+  /** header + group table, always fetched (one Range request, two if larger than V3_FIRST_REQUEST_BYTES) */
+  headerAndGroupsBytes: number
+  /** records of the unmatched groups */
+  recordsBytes: number
+  /** headerAndGroupsBytes + recordsBytes */
+  mapBytes: number
+  /** Range requests for the map: 1 (or 2) for header + groups, plus one per run of adjacent unmatched groups */
+  mapRanges: number
+  downloadBytes: number
+  ranges: number
+  totalWire: number
+  /** total wire minus the v2 default row's total wire (same variant) */
+  deltaVsV2Default: number
+}
+
+/**
+ * Encodes the blocks of a v2 map (as produced by `buildBlockMap`, optionally with the asar region
+ * chunked by `chunker`) as a v3 block map: the v3 block hash is the first 8 bytes of the blake2b-18
+ * digest that the v2 checksum base64-encodes.
+ */
+function v2ToV3(map: BlockMap, pkg: PackageInfo, chunker: ChunkerParams | null): Buffer {
+  const file = map.files[0]
+  const blocks: Array<BlockInput> = []
+  let offset = file.offset
+  for (let i = 0; i < file.checksums.length; i++) {
+    blocks.push({ digest: Buffer.from(file.checksums[i], "base64"), size: file.sizes[i], offset })
+    offset += file.sizes[i]
+  }
+  return encodeBlockMapV3(blocks, {
+    fileSize: pkg.size,
+    defaultChunker: DEFAULT_CHUNKER,
+    regions: chunker == null ? null : [{ offset: pkg.asarOffset, size: pkg.asarSize, ...chunker }],
+  })
+}
+
+function measureV3(config: string, oldV3: Buffer, newV3: Buffer): V3Row {
+  const oldMap = decodeBlockMapV3(oldV3)
+  const newMap = decodeBlockMapV3(newV3)
+  const groupKey = (g: { hash: string; byteLength: number; blockCount: number }) => `${g.hash}:${g.byteLength}:${g.blockCount}`
+  const oldGroups = new Set(oldMap.groups.map(groupKey))
+
+  const headerAndGroupsBytes = newMap.header.headerLen + newMap.header.groupCount * GROUP_SIZE
+  let mapRanges = headerAndGroupsBytes > V3_FIRST_REQUEST_BYTES ? 2 : 1
+  let recordsBytes = 0
+  let groupsFetched = 0
+  let previousUnmatched = false
+  for (const group of newMap.groups) {
+    const unmatched = !oldGroups.has(groupKey(group))
+    if (unmatched) {
+      groupsFetched++
+      recordsBytes += group.blockCount * RECORD_SIZE
+      if (!previousUnmatched) {
+        mapRanges++
+      }
+    }
+    previousUnmatched = unmatched
+  }
+
+  const ops = planOperations(toBlockMap(oldMap), toBlockMap(newMap))
+  let downloadBytes = 0
+  let ranges = 0
+  for (const op of ops) {
+    if (op.kind === OperationKind.DOWNLOAD) {
+      ranges++
+      downloadBytes += op.end - op.start
+    }
+  }
+  const mapBytes = headerAndGroupsBytes + recordsBytes
+  return {
+    config,
+    blocksTotal: newMap.header.blockCount,
+    groupsTotal: newMap.header.groupCount,
+    groupsFetched,
+    mapFileBytes: newV3.length,
+    headerAndGroupsBytes,
+    recordsBytes,
+    mapBytes,
+    mapRanges,
+    downloadBytes,
+    ranges,
+    totalWire: mapBytes + downloadBytes + (mapRanges + ranges) * RANGE_OVERHEAD,
+    deltaVsV2Default: 0,
+  }
+}
+
 // ─── reporting ────────────────────────────────────────────────────────────────
 
 const fmt = (n: number) => n.toLocaleString("en-US")
@@ -493,6 +611,24 @@ function renderTable(rows: Array<Row>): string {
         : `${r.deltaVsDefault > 0 ? "+" : ""}${fmt(r.deltaVsDefault)} (${r.deltaVsDefault > 0 ? "+" : ""}${pct(r.deltaVsDefault, r.totalWire - r.deltaVsDefault)})`
     lines.push(
       `| ${r.config} | ${fmt(r.blocksInAsar)} (${fmt(r.blocksTotal)}) | ${fmt(r.blockMapGzBytes)} | ${fmt(r.downloadBytes)} (${fmt(r.downloadHeader)} / ${fmt(r.downloadContent)} / ${fmt(r.downloadOutside)}) | ${fmt(r.ranges)} | ${fmt(r.totalWire)} | ${delta} |`
+    )
+  }
+  return lines.join("\n")
+}
+
+function renderDelta(delta: number, total: number): string {
+  const sign = delta > 0 ? "+" : ""
+  return `${sign}${fmt(delta)} (${sign}${pct(delta, total - delta)})`
+}
+
+function renderV3Table(rows: Array<V3Row>): string {
+  const lines = [
+    "| config | blocks (groups) | v3 map bytes fetched (hdr+groups / records of N changed groups) | #map ranges | data bytes | #data ranges | total wire | vs v2 default |",
+    "|---|---:|---:|---:|---:|---:|---:|---:|",
+  ]
+  for (const r of rows) {
+    lines.push(
+      `| ${r.config} | ${fmt(r.blocksTotal)} (${fmt(r.groupsTotal)}) | ${fmt(r.mapBytes)} (${fmt(r.headerAndGroupsBytes)} / ${fmt(r.recordsBytes)} of ${fmt(r.groupsFetched)}) | ${fmt(r.mapRanges)} | ${fmt(r.downloadBytes)} | ${fmt(r.ranges)} | ${fmt(r.totalWire)} | ${renderDelta(r.deltaVsV2Default, r.totalWire)} |`
     )
   }
   return lines.join("\n")
@@ -522,6 +658,13 @@ function conclusions(result: VariantResult): Array<string> {
       }
     }
     out.push(crossover ?? "- no crossover inside the sweep: every step to smaller asar blocks still lowered the total wire cost.")
+  }
+  if (result.v3.length > 0) {
+    const bestV3 = result.v3.reduce((a, b) => (b.totalWire < a.totalWire ? b : a))
+    out.push(
+      `- block map v3: minimum total wire "${bestV3.config}" at ${fmt(bestV3.totalWire)} B (${pct(bestV3.totalWire, def.totalWire)} of the v2 default row, ` +
+        `${pct(bestV3.totalWire, best.totalWire)} of the best v2 row): ${fmt(bestV3.mapBytes)} B of map in ${fmt(bestV3.mapRanges)} range(s) + ${fmt(bestV3.downloadBytes)} B of data in ${fmt(bestV3.ranges)} range(s).`
+    )
   }
   return out
 }
@@ -722,17 +865,23 @@ describe.runIf(process.env.BENCH === "1")("differential one-line-change benchmar
       const pkgs = v2Packages.get(v.id)!
       const offsetsShifted = countShiftedOffsets(v1StoredAsarBytes, await fs.readFile(v.storedAsar))
       const stored: Array<Row> = []
+      const v3: Array<V3Row> = []
       for (const c of configs) {
         const newMap = await buildMap(pkgs.stored, c.asarChunker)
         stored.push(measure(c.name, v1Maps.get(c.name)!.map, newMap.map, pkgs.stored, newMap.gzBytes))
+        // v3 rows: the same blocks, encoded as a block map v3 (see the header comment)
+        v3.push(measureV3(c.name, v2ToV3(v1Maps.get(c.name)!.map, v1Stored, c.asarChunker), v2ToV3(newMap.map, pkgs.stored, c.asarChunker)))
       }
       const defaultTotal = stored.find(r => r.config === DEFAULT_CONFIG_NAME)!.totalWire
       for (const r of stored) {
         r.deltaVsDefault = r.totalWire - defaultTotal
       }
+      for (const r of v3) {
+        r.deltaVsV2Default = r.totalWire - defaultTotal
+      }
       const controlMap = await buildMap(pkgs.compressed, null)
       const compressed = [measure(DEFAULT_CONFIG_NAME, v1CompressedMap.map, controlMap.map, pkgs.compressed, controlMap.gzBytes)]
-      results.push({ variant: v.id, description: v.description, offsetsShifted, stored, compressed })
+      results.push({ variant: v.id, description: v.description, offsetsShifted, stored, compressed, v3 })
       console.log(`[bench] measured variant ${v.id}: ${fmt(offsetsShifted.shifted)}/${fmt(offsetsShifted.total)} header offsets shifted [${elapsed()}]`)
     }
 
@@ -747,7 +896,14 @@ describe.runIf(process.env.BENCH === "1")("differential one-line-change benchmar
     )
     md.push("")
     md.push(
-      "total wire = DOWNLOAD bytes + new blockmap (gz) + #ranges × overhead. Download bytes are classified by where they land in the NEW package: asar header (JSON directory) / asar file contents / outside the asar (7z headers, other members)."
+      "total wire = DOWNLOAD bytes + new blockmap (gz) + #ranges × overhead. Download bytes are classified by where they land in the NEW package: asar header (JSON directory) / asar file contents / outside the asar (7z headers, other members). " +
+        "DOWNLOAD operations are taken after electron-updater's gap coalescing (COPY gaps < 8 KiB between two DOWNLOADs are downloaded through)."
+    )
+    md.push("")
+    md.push(
+      "Block map v3 rows (`.blockmap3`): the same blocks as the v2 row of that config, encoded as the range-fetchable two-level binary map. " +
+        "v3 total wire = header + group table (1 Range request) + records of the new groups whose (hash, byteLength, blockCount) match no old group (adjacent groups coalesced into one range) " +
+        "+ DOWNLOAD bytes (same plan as the v2 row) + (#map ranges + #data ranges) × overhead. The old v3 map is assumed cached locally (as the old v2 map is today)."
     )
     const v1Aligned = alignedAsars.get(v1Asar)
     if (v1Aligned != null) {
@@ -769,6 +925,10 @@ describe.runIf(process.env.BENCH === "1")("differential one-line-change benchmar
       md.push("")
       md.push(renderTable(r.stored))
       md.push("")
+      md.push(`### block map v3 (.blockmap3), stored asar`)
+      md.push("")
+      md.push(renderV3Table(r.v3))
+      md.push("")
       md.push(`### control: asar compressed with the rest (no storedPaths)`)
       md.push("")
       md.push(renderTable(r.compressed))
@@ -779,6 +939,8 @@ describe.runIf(process.env.BENCH === "1")("differential one-line-change benchmar
     md.push("")
     const overallBest = results.map(r => r.stored.reduce((a, b) => (b.totalWire < a.totalWire ? b : a)).config)
     md.push(`Best config per variant: ${results.map((r, i) => `${r.variant} → "${overallBest[i]}"`).join("; ")}.`)
+    const overallBestV3 = results.map(r => r.v3.reduce((a, b) => (b.totalWire < a.totalWire ? b : a)))
+    md.push(`Best v3 config per variant: ${results.map((r, i) => `${r.variant} → "${overallBestV3[i].config}" (${fmt(overallBestV3[i].totalWire)} B)`).join("; ")}.`)
     const report = md.join("\n")
     console.log(`\n${report}\n\n[bench] done in ${elapsed()}`)
 
@@ -814,6 +976,16 @@ describe.runIf(process.env.BENCH === "1")("differential one-line-change benchmar
       const def = r.stored.find(it => it.config === DEFAULT_CONFIG_NAME)!
       expect(def.totalWire).toBeLessThan(r.compressed[0].totalWire)
       expect(def.downloadBytes).toBeGreaterThan(0)
+      // v3 rows encode the same blocks as the v2 row of the same config → same plan, and the map
+      // fetched is never more than the whole v3 file
+      for (const v3Row of r.v3) {
+        const v2Row = r.stored.find(it => it.config === v3Row.config)!
+        expect(v3Row.blocksTotal, v3Row.config).toBe(v2Row.blocksTotal)
+        expect(v3Row.downloadBytes, v3Row.config).toBe(v2Row.downloadBytes)
+        expect(v3Row.ranges, v3Row.config).toBe(v2Row.ranges)
+        expect(v3Row.mapBytes, v3Row.config).toBeLessThanOrEqual(v3Row.mapFileBytes)
+        expect(v3Row.groupsFetched, v3Row.config).toBeGreaterThan(0)
+      }
     }
   })
 })

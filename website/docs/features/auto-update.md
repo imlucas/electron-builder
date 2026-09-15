@@ -267,6 +267,30 @@ Because some of your users will be on the broken 1.0.1, releasing a new 1.0.1 wo
 
 `latest.yml` (or `latest-mac.yml` for macOS, or `latest-linux.yml` for Linux) will be generated and uploaded for all providers except `bintray` (because not required, `bintray` doesn't use `latest.yml`).
 
+### Differential updates: `.blockmap` and `.blockmap3`
+
+For targets that support differential (delta) updates (NSIS on Windows; AppImage embeds its map in the binary), electron-builder publishes a **block map** next to the installer: a list of content-defined blocks and their hashes. electron-updater compares the new map with the one of the installed version and downloads only the byte ranges that changed, using HTTP `Range` requests.
+
+Two block map artifacts are uploaded for every NSIS installer:
+
+* `<installer>.blockmap` — the block map format every electron-updater release understands (gzipped JSON, ~16 KiB blocks). It is downloaded in full on every update, so it is a fixed cost of roughly 20 bytes per block of the installer.
+* `<installer>.blockmap3` — a **block map v3**: an additional, uncompressed binary artifact that a recent electron-updater fetches with `Range` requests. It carries the same blocks in a two-level layout (a small table of *groups* of blocks, then one 10-byte record per block), so the updater reads the group table, compares it with its cached previous map and fetches only the records of the groups that changed. The map cost of an update therefore becomes proportional to the change instead of to the installer size, which is what makes much finer blocks inside `app.asar` affordable.
+
+Compatibility: `.blockmap3` is only ever consumed in addition to `.blockmap`, never instead of it. Older electron-updater versions ignore the unknown file and keep using `.blockmap` exactly as before; a new electron-updater that cannot fetch or parse `.blockmap3` (404, no range support, ...) silently falls back to `.blockmap`. Nothing changes for full downloads. If you upload artifacts yourself (a custom `generic` server), upload both files together with the installer.
+
+The v3 map pays off most for app-code changes when the asar is stored uncompressed and laid out so that a small edit does not shift the rest of the archive:
+
+```json
+{
+  "nsis": { "differentialPackage": "store-asar" },
+  "asar": { "contentAlignment": 512 }
+}
+```
+
+`nsis.differentialPackage: "store-asar"` stores `resources/app.asar` uncompressed in the differential package (so a one-line change maps to a few changed blocks instead of a re-compressed archive), and `asar.contentAlignment` pads file contents inside the asar so that a file growing by a few bytes does not move the offsets of every later file. With both, the block map v3 rows of the repository benchmark (`test/src/differentialOneLineBenchTest.ts`) bring a one-line change in a 32 MB asar down to a few tens of kilobytes on the wire.
+
+electron-updater also downloads through small gaps between changed ranges (copy gaps below 8 KiB are fetched rather than copied, saving one request per gap on hosts such as GitHub or S3 that serve a single range per request) and never puts more than 200 ranges into one `multipart/byteranges` request (Apache's default `MaxRanges`).
+
 ## Private GitHub Update Repo
 
 You can use a private repository for updates with electron-updater by setting the `GH_TOKEN` environment variable (on user machine) and `private` option.
