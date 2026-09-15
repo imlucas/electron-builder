@@ -14,6 +14,7 @@ exports[`createDesktopShortcut always 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
@@ -44,6 +45,7 @@ exports[`custom guid 1`] = `
       },
     },
     {
+      "arch": "ia32",
       "file": "boo Hub Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "boo-Hub-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
@@ -74,6 +76,57 @@ exports[`custom include 1`] = `
       },
     },
     {
+      "arch": "x64",
+      "file": "Test App ßW Setup 1.1.0.exe.blockmap",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
+      "updateInfo": {
+        "sha512": "@sha512",
+        "size": "@size",
+      },
+    },
+  ],
+}
+`;
+
+exports[`custom include as array 1`] = `
+{
+  "win": [
+    {
+      "arch": "x64",
+      "file": "Test App ßW Setup 1.1.0.exe",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe",
+      "updateInfo": {
+        "sha512": "@sha512",
+        "size": "@size",
+      },
+    },
+    {
+      "arch": "x64",
+      "file": "Test App ßW Setup 1.1.0.exe.blockmap",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
+      "updateInfo": {
+        "sha512": "@sha512",
+        "size": "@size",
+      },
+    },
+  ],
+}
+`;
+
+exports[`custom include with sibling include and customUnInstall 1`] = `
+{
+  "win": [
+    {
+      "arch": "x64",
+      "file": "Test App ßW Setup 1.1.0.exe",
+      "safeArtifactName": "TestApp-Setup-1.1.0.exe",
+      "updateInfo": {
+        "sha512": "@sha512",
+        "size": "@size",
+      },
+    },
+    {
+      "arch": "x64",
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
@@ -104,6 +157,7 @@ exports[`custom script 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
@@ -134,6 +188,7 @@ exports[`file associations per user 1`] = `
       },
     },
     {
+      "arch": "ia32",
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
@@ -164,6 +219,7 @@ exports[`html license 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
@@ -194,6 +250,7 @@ exports[`menuCategory 1`] = `
       },
     },
     {
+      "arch": "ia32",
       "file": "Test Menu Category CustomName 1.1.0.exe.blockmap",
       "safeArtifactName": "Test-Menu-Category-CustomName-1.1.0.exe.blockmap",
       "updateInfo": {
@@ -224,6 +281,7 @@ exports[`multi language license 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
@@ -254,6 +312,7 @@ exports[`one-click 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Test App ßW Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
@@ -308,6 +367,7 @@ exports[`perMachine, no run after finish 1`] = `
       },
     },
     {
+      "arch": "ia32",
       "file": "TestApp Setup 1.1.0.exe.blockmap",
       "safeArtifactName": "TestApp-Setup-1.1.0.exe.blockmap",
       "updateInfo": {
@@ -349,6 +409,18 @@ exports[`perMachine, no run after finish 2`] = `
 }
 `;
 
+exports[`portable custom include 1`] = `
+{
+  "win": [
+    {
+      "arch": "x64",
+      "file": "Test App ßW 1.1.0.exe",
+      "safeArtifactName": "TestApp-1.1.0.exe",
+    },
+  ],
+}
+`;
+
 exports[`string menuCategory 1`] = `
 {
   "win": [
@@ -363,6 +435,7 @@ exports[`string menuCategory 1`] = `
       },
     },
     {
+      "arch": "ia32",
       "file": "Test Menu Category ' CustomName 1.1.0.exe.blockmap",
       "safeArtifactName": "test-menu-category-setup-1.1.0.exe.blockmap",
       "updateInfo": {

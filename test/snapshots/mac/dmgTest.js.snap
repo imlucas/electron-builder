@@ -14,6 +14,7 @@ exports[`custom background - new way 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Test App ßW-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap",
       "updateInfo": {
@@ -167,6 +168,7 @@ exports[`dmg > app is copyable from mounted dmg and bundle structure is intact 1
       },
     },
     {
+      "arch": "x64",
       "file": "DmgCopyTest-1.1.0.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -327,6 +329,7 @@ exports[`dmg > bundleShortVersion 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Bundle-ShortVersion-2017.1-alpha5.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -403,6 +406,7 @@ exports[`dmg > custom background - new way 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "CustomBackground-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "CustomBackground-1.1.0-mac.zip.blockmap",
       "updateInfo": {
@@ -481,6 +485,7 @@ exports[`dmg > disable dmg icon (light), bundleVersion 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Disable-Icon-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "Disable-Icon-1.1.0-mac.zip.blockmap",
       "updateInfo": {
@@ -559,6 +564,7 @@ exports[`dmg > dmg 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Default-Dmg-1.1.0.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -801,6 +807,7 @@ exports[`dmg > license buttons config 2`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Foo-5-1.1.0.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -877,6 +884,7 @@ exports[`dmg > license en 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Foo-3-1.1.0.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -953,6 +961,7 @@ exports[`dmg > license ja 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Foo-2-1.1.0.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -1029,6 +1038,7 @@ exports[`dmg > license rtf 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Foo-4-1.1.0.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -1105,6 +1115,7 @@ exports[`dmg > multi language license 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Foo-1-1.1.0.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -1181,6 +1192,7 @@ exports[`dmg > no background 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "No-Background-1.1.0.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -1275,6 +1287,7 @@ exports[`dmg > no build directory 2`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "NoBuildDirectory-1.1.0.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -1351,6 +1364,7 @@ exports[`dmg > retina background as 2 png 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "RetinaBackground-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "RetinaBackground-1.1.0-mac.zip.blockmap",
       "updateInfo": {
@@ -1429,6 +1443,7 @@ exports[`dmg > unset dmg icon 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "No_Volume_Icon-1.1.0.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,

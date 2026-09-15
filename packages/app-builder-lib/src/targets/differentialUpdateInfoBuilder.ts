@@ -1,4 +1,4 @@
-import { log } from "builder-util"
+import { Arch, log } from "builder-util"
 import { BLOCK_MAP_V3_FILE_SUFFIX, BlockMapDataHolder, PackageFileInfo } from "builder-util-runtime"
 import * as path from "path"
 import { Target } from "../core.js"
@@ -140,6 +140,7 @@ export async function createBlockmap(
   target: Target,
   packager: PlatformPackager<any>,
   safeArtifactName: string | null,
+  arch: Arch | null = null,
   options?: BuildBlockMapOptions
 ): Promise<BlockMapDataHolder> {
   const blockMapFile = `${file}${BLOCK_MAP_FILE_SUFFIX}`
@@ -149,7 +150,7 @@ export async function createBlockmap(
     file: blockMapFile,
     safeArtifactName: safeArtifactName == null ? null : `${safeArtifactName}${BLOCK_MAP_FILE_SUFFIX}`,
     target,
-    arch: null,
+    arch,
     packager,
     updateInfo,
   })
@@ -167,7 +168,7 @@ export async function createBlockmap(
     file: blockMapV3File,
     safeArtifactName: safeArtifactName == null ? null : `${safeArtifactName}${BLOCK_MAP_V3_FILE_SUFFIX}`,
     target,
-    arch: null,
+    arch,
     packager,
   })
   updateInfo.blockMapV3 = true

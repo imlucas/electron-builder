@@ -319,7 +319,7 @@ describe("createBlockmap — v3 emission", () => {
 
     const packager = { emitArtifactBuildCompleted: vi.fn().mockResolvedValue(undefined) }
     const target = { name: "nsis" }
-    const updateInfo = await createBlockmap(file, target as any, packager as any, "App-Setup-1.0.0.exe", { regions })
+    const updateInfo = await createBlockmap(file, target as any, packager as any, "App-Setup-1.0.0.exe", null, { regions })
 
     expect(updateInfo.blockMapV3).toBe(true)
     expect(updateInfo.size).toBe(data.length)

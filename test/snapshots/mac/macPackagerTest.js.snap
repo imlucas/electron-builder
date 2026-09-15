@@ -25,6 +25,8 @@ exports[`macPackager > extraFiles are placed in product app bundle Contents, not
   "Info.plist",
   "PkgInfo",
   "extraTestFile.txt",
+  "Resources/LICENSE.electron.txt",
+  "Resources/LICENSES.chromium.html",
   "Resources/app.asar",
   "Resources/icon.icns",
   "MacOS/Test App ßW",
@@ -373,6 +375,8 @@ exports[`macPackager > extraFiles are placed in product app bundle Contents, not
 
 exports[`macPackager > extraFiles are placed in product app bundle Contents, not Electron.app 4`] = `
 [
+  "LICENSE.electron.txt",
+  "LICENSES.chromium.html",
   "app.asar",
   "icon.icns",
 ]
@@ -466,6 +470,7 @@ exports[`macPackager > multiple asar resources 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Test App ßW-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap",
       "updateInfo": {
@@ -541,6 +546,8 @@ exports[`macPackager > multiple asar resources 2`] = `
 
 exports[`macPackager > multiple asar resources 3`] = `
 [
+  "LICENSE.electron.txt",
+  "LICENSES.chromium.html",
   "app.asar",
   "extraAsar.asar",
   "icon.icns",
@@ -572,6 +579,7 @@ exports[`macPackager > one-package 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Test App ßW-1.1.0-mac.zip.blockmap",
       "safeArtifactName": "Test App ßW-1.1.0-mac.zip.blockmap",
       "updateInfo": {
@@ -581,6 +589,7 @@ exports[`macPackager > one-package 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "Test App ßW-1.1.0.dmg.blockmap",
       "safeArtifactName": "TestApp-1.1.0.dmg.blockmap",
       "updateInfo": {
@@ -768,6 +777,24 @@ exports[`macPackager > two-package 1`] = `
       },
     },
     {
+      "arch": "x64",
+      "file": "TestApp-1.1.0-mac-x64.dmg.blockmap",
+      "updateInfo": {
+        "sha512": "@sha512",
+        "size": "@size",
+      },
+    },
+    {
+      "arch": "x64",
+      "file": "TestApp-1.1.0-mac-x64.zip.blockmap",
+      "safeArtifactName": "TestApp-1.1.0-mac-x64.zip.blockmap",
+      "updateInfo": {
+        "sha512": "@sha512",
+        "size": "@size",
+      },
+    },
+    {
+      "arch": "arm64",
       "file": "TestApp-1.1.0-mac-arm64.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -776,6 +803,7 @@ exports[`macPackager > two-package 1`] = `
       },
     },
     {
+      "arch": "arm64",
       "file": "TestApp-1.1.0-mac-arm64.zip.blockmap",
       "safeArtifactName": "TestApp-1.1.0-mac-arm64.zip.blockmap",
       "updateInfo": {
@@ -785,6 +813,7 @@ exports[`macPackager > two-package 1`] = `
       },
     },
     {
+      "arch": "universal",
       "file": "TestApp-1.1.0-mac-universal.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -793,6 +822,7 @@ exports[`macPackager > two-package 1`] = `
       },
     },
     {
+      "arch": "universal",
       "file": "TestApp-1.1.0-mac-universal.zip.blockmap",
       "safeArtifactName": "TestApp-1.1.0-mac-universal.zip.blockmap",
       "updateInfo": {
@@ -802,6 +832,7 @@ exports[`macPackager > two-package 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "TestApp-1.1.0-mac-x64.dmg.blockmap",
       "updateInfo": {
         "blockMapV3": true,
@@ -810,6 +841,7 @@ exports[`macPackager > two-package 1`] = `
       },
     },
     {
+      "arch": "x64",
       "file": "TestApp-1.1.0-mac-x64.zip.blockmap",
       "safeArtifactName": "TestApp-1.1.0-mac-x64.zip.blockmap",
       "updateInfo": {
@@ -819,23 +851,29 @@ exports[`macPackager > two-package 1`] = `
       },
     },
     {
+      "arch": "arm64",
       "file": "TestApp-1.1.0-mac-arm64.dmg.blockmap3",
     },
     {
+      "arch": "arm64",
       "file": "TestApp-1.1.0-mac-arm64.zip.blockmap3",
       "safeArtifactName": "TestApp-1.1.0-mac-arm64.zip.blockmap3",
     },
     {
+      "arch": "universal",
       "file": "TestApp-1.1.0-mac-universal.dmg.blockmap3",
     },
     {
+      "arch": "universal",
       "file": "TestApp-1.1.0-mac-universal.zip.blockmap3",
       "safeArtifactName": "TestApp-1.1.0-mac-universal.zip.blockmap3",
     },
     {
+      "arch": "x64",
       "file": "TestApp-1.1.0-mac-x64.dmg.blockmap3",
     },
     {
+      "arch": "x64",
       "file": "TestApp-1.1.0-mac-x64.zip.blockmap3",
       "safeArtifactName": "TestApp-1.1.0-mac-x64.zip.blockmap3",
     },
@@ -939,6 +977,8 @@ exports[`macPackager > two-package 2`] = `
 
 exports[`macPackager > two-package 3`] = `
 [
+  "LICENSE.electron.txt",
+  "LICENSES.chromium.html",
   "app-update.yml",
   "app.asar",
   "bn.lproj",
@@ -1023,6 +1063,8 @@ exports[`macPackager > two-package 5`] = `
 
 exports[`macPackager > two-package 6`] = `
 [
+  "LICENSE.electron.txt",
+  "LICENSES.chromium.html",
   "app-update.yml",
   "app.asar",
   "bn.lproj",
@@ -1107,6 +1149,8 @@ exports[`macPackager > two-package 8`] = `
 
 exports[`macPackager > two-package 9`] = `
 [
+  "LICENSE.electron.txt",
+  "LICENSES.chromium.html",
   "app-update.yml",
   "app.asar",
   "bn.lproj",
@@ -1154,6 +1198,7 @@ exports[`macPackager > yarn two package.json w/ native module 1`] = `
       },
     },
     {
+      "arch": "universal",
       "file": "test-app-two-native-modules-1.1.1-universal-mac.zip.blockmap",
       "safeArtifactName": "test-app-two-native-modules-1.1.1-universal-mac.zip.blockmap",
       "updateInfo": {
@@ -2186,6 +2231,8 @@ exports[`macPackager > yarn two package.json w/ native module 3`] = `
 
 exports[`macPackager > yarn two package.json w/ native module 4`] = `
 [
+  "LICENSE.electron.txt",
+  "LICENSES.chromium.html",
   "app.asar",
   "electron.icns",
   "app.asar.unpacked/node_modules/node-pty/LICENSE",
