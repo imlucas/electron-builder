@@ -8,6 +8,7 @@ import { AsarOptions } from "../options/PlatformSpecificBuildOptions.js"
 import { PlatformPackager } from "../platformPackager.js"
 import { ResolvedFileSet, getDestinationPath } from "../util/appFileCopier.js"
 import { detectUnpackedDirs } from "./unpackDetector.js"
+import { alignAsarContent } from "./asarAlign.js"
 import { Readable } from "stream"
 import * as os from "os"
 const { readlink } = fs
@@ -42,6 +43,54 @@ const ALLOWLIST = resolvePaths([
   os.homedir(), // always allow home dir
 ])
 
+/**
+ * Applies an asar ordering file (`asar.ordering`) to the stream list `@electron/asar` packs: directories keep
+ * their (root-to-leaf) positions, the listed files follow in the order of the file, then everything else in
+ * its original order. Lines use the same syntax `@electron/asar` accepts — a path relative to the app root,
+ * optionally prefixed with `/` or with a `<anything>:` prefix (e.g. a load counter) — blank lines are ignored.
+ * Files listed but not present are counted in `listed` and skipped.
+ */
+export function orderAsarStreams(streams: Array<AsarStreamType>, orderingLines: Array<string>): { streams: Array<AsarStreamType>; listed: number; matched: number } {
+  const rank = new Map<string, number>()
+  for (const rawLine of orderingLines) {
+    let line = rawLine
+    if (line.includes(":")) {
+      line = line.split(":").pop()!
+    }
+    line = line.trim()
+    if (line.length === 0) {
+      continue
+    }
+    if (line.startsWith("/")) {
+      line = line.slice(1)
+    }
+    const key = path.normalize(line)
+    if (!rank.has(key)) {
+      rank.set(key, rank.size)
+    }
+  }
+  if (rank.size === 0) {
+    return { streams, listed: 0, matched: 0 }
+  }
+  const directories: Array<AsarStreamType> = []
+  const listed: Array<{ stream: AsarStreamType; rank: number }> = []
+  const rest: Array<AsarStreamType> = []
+  for (const stream of streams) {
+    if (stream.type === "directory") {
+      directories.push(stream)
+      continue
+    }
+    const position = rank.get(path.normalize(stream.path))
+    if (position == null) {
+      rest.push(stream)
+    } else {
+      listed.push({ stream, rank: position })
+    }
+  }
+  listed.sort((a, b) => a.rank - b.rank)
+  return { streams: [...directories, ...listed.map(it => it.stream), ...rest], listed: rank.size, matched: listed.length }
+}
+
 /** @internal */
 export class AsarPackager {
   private readonly outFile: string
@@ -67,8 +116,23 @@ export class AsarPackager {
       fileSets[0],
     ].map(set => this.orderFileSet(set))
 
-    const streams = await this.processFileSets(orderedFileSets)
+    let streams = await this.processFileSets(orderedFileSets)
+    const ordering = this.config.options.ordering
+    if (!isEmptyOrSpaces(ordering)) {
+      const orderingFile = path.resolve(this.packager.projectDir, ordering)
+      const { streams: ordered, listed, matched } = orderAsarStreams(streams, (await fs.readFile(orderingFile, "utf8")).split(/\r?\n/))
+      log.info({ ordering: log.filePath(orderingFile), matched: `${matched}/${listed}` }, "applied asar ordering")
+      if (matched < listed) {
+        log.debug({ ordering: log.filePath(orderingFile), missing: listed - matched }, "asar ordering lists files that are not in the archive")
+      }
+      streams = ordered
+    }
     await this.executeElectronAsar(streams)
+
+    const contentAlignment = this.config.options.contentAlignment
+    if (contentAlignment != null && contentAlignment !== 0) {
+      await alignAsarContent(this.outFile, contentAlignment)
+    }
   }
 
   private async executeElectronAsar(streams: AsarStreamType[]) {
