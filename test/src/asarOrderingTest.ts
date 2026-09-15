@@ -1,10 +1,11 @@
 import { Platform } from "app-builder-lib"
 import { readAsarHeader } from "app-builder-lib/src/asar/asar"
 import { orderAsarStreams } from "app-builder-lib/src/asar/asarUtil"
-import type { AsarStreamType } from "@electron/asar"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { app, linuxDirTarget } from "./helpers/packTester.js"
+
+type AsarStreamType = Parameters<typeof orderAsarStreams>[0][number]
 
 const dir = (p: string): AsarStreamType => ({ type: "directory", path: p, unpacked: false })
 const file = (p: string): AsarStreamType => ({ type: "file", path: p, unpacked: false, streamGenerator: () => null as any, stat: { mode: 0o644, size: 1 } as any })
