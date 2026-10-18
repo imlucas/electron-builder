@@ -1,4 +1,5 @@
 import { assertNoSymlinkLeaves, debug7z, exec, exists, ExternalLinkPolicy, log, statOrNull, unlinkIfExists } from "builder-util"
+import * as fs from "fs/promises"
 import * as path from "path"
 import { create } from "tar"
 import type { TarOptionsWithAliasesAsync } from "tar"
@@ -270,6 +271,25 @@ export async function archive(format: string, outFile: string, dirToArchive: str
     throw new Error("storedPaths is not supported with the native zip fallback")
   }
 
+  // PROTOTYPE (W4, not for merge): with ELECTRON_BUILDER_PE_BLOCKS=1, compress executables and DLLs in their own passes with
+  // small LZMA2 blocks (exe 1 MB, DLL 256 KB), so a re-signed binary rewrites only the blocks its signature touches.
+  const peMembers: Array<{ member: string; isExe: boolean }> = []
+  const is7zFormat = format === "7z" || format.endsWith(".7z")
+  if (use7z && is7zFormat && process.env.ELECTRON_BUILDER_PE_BLOCKS === "1" && options.compression !== "store") {
+    const files = (await fs.readdir(dirToArchive, { recursive: true, withFileTypes: true })).filter(it => it.isFile())
+    for (const file of files) {
+      const lower = file.name.toLowerCase()
+      if (!lower.endsWith(".exe") && !lower.endsWith(".dll")) {
+        continue
+      }
+      const rel = path.relative(dirToArchive, path.join(file.parentPath, file.name))
+      const member = path.normalize(options.withoutDir ? rel : path.join(path.basename(dirToArchive), rel))
+      if (!storedMembers.includes(member)) {
+        peMembers.push({ member, isExe: lower.endsWith(".exe") })
+      }
+    }
+  }
+
   if (use7z) {
     if (!options.preserveSymlinks) {
       // 7za stores what a symlink points to: one that leaves the archived directory would package files from elsewhere
@@ -288,6 +308,7 @@ export async function archive(format: string, outFile: string, dirToArchive: str
     args.push(...buildExcludeArgs(options.excluded, "-xr!"))
     // `-x!` (exact, non-recursive) so only the member itself is skipped, never a same-named sibling
     args.push(...storedMembers.map(member => `-x!${member}`))
+    args.push(...peMembers.map(it => `-x!${it.member}`))
 
     const cwd = options.withoutDir ? dirToArchive : path.dirname(dirToArchive)
     try {
@@ -298,6 +319,24 @@ export async function archive(format: string, outFile: string, dirToArchive: str
       } else {
         throw e
       }
+    }
+
+    for (const [isExe, chunk] of [
+      [true, "1m"],
+      [false, "256k"],
+    ] as const) {
+      const members = peMembers.filter(it => it.isExe === isExe).map(it => it.member)
+      if (members.length === 0) {
+        continue
+      }
+      const peArgs = debug7zArgs("a")
+      peArgs.push("-mx=9", `-m0=LZMA2:d=1m:c=${chunk}`, "-mtc=off", "-ms=off")
+      if (options.isArchiveHeaderCompressed === false) {
+        peArgs.push("-mhc=off")
+      }
+      peArgs.push("-mf=BCJ", "-mtm=off", "-mta=off", outFile, ...members)
+      log.info({ members: members.length, chunk }, "PROTOTYPE: appending PE members with small LZMA2 blocks")
+      await exec(await getPath7za(), peArgs, { cwd }, debug7z.enabled)
     }
 
     if (storedMembers.length > 0) {
