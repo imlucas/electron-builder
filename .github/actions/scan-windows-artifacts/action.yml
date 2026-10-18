@@ -34,6 +34,13 @@ inputs:
       apply to individual files, so an installer-level scan alone can miss what users' Defender
       flags after install. Also scans app.asar.unpacked next to it.
     default: ""
+  unpack-installers:
+    description: >-
+      For each .exe in files, unpack it with 7-Zip and also scan the embedded app package
+      ($PLUGINSDIR/app-*.7z) and every file inside it. Defender's on-demand scan does not unpack
+      NSIS installers (a 170-290 MB installer scans in about 1 s), so without this the app's files
+      are only scanned at install time.
+    default: "true"
   install:
     description: Optional glob of an NSIS installer to run with /S under real-time protection.
     default: ""
@@ -139,6 +146,21 @@ runs:
             $sw = [Diagnostics.Stopwatch]::StartNew()
             & $env:AVSCAN_MPCMDRUN -Scan -ScanType 3 -File $f.FullName -DisableRemediation | Out-Host
             [pscustomobject]@{ phase='static'; file=$f.Name; bytes=$f.Length; sha256=(Get-FileHash $f.FullName).Hash.ToLower(); mpcmdrunExit=$LASTEXITCODE; seconds=[int]$sw.Elapsed.TotalSeconds }
+            if ('${{ inputs.unpack-installers }}' -eq 'true' -and $f.Extension -eq '.exe') {
+              $x = Join-Path $env:AVSCAN_DIR "nsis-$([guid]::NewGuid().ToString('n'))"
+              7z x -y "-o$x" $f.FullName | Out-Null
+              foreach ($pkg in (Get-ChildItem -Recurse -File $x -Filter '*.7z' -ErrorAction SilentlyContinue)) {
+                $sw = [Diagnostics.Stopwatch]::StartNew()
+                & $env:AVSCAN_MPCMDRUN -Scan -ScanType 3 -File $pkg.FullName -DisableRemediation | Out-Host
+                [pscustomobject]@{ phase='static-embedded'; file="$($f.Name)!$($pkg.Name)"; bytes=$pkg.Length; sha256=(Get-FileHash $pkg.FullName).Hash.ToLower(); mpcmdrunExit=$LASTEXITCODE; seconds=[int]$sw.Elapsed.TotalSeconds }
+                $px = "$x-pkg"; 7z x -y "-o$px" $pkg.FullName | Out-Null
+                $sw = [Diagnostics.Stopwatch]::StartNew()
+                & $env:AVSCAN_MPCMDRUN -Scan -ScanType 3 -File $px -DisableRemediation | Out-Host
+                [pscustomobject]@{ phase='static-embedded-files'; file="$($f.Name)!$($pkg.Name) ($((Get-ChildItem -Recurse -File $px).Count) files)"; bytes=''; sha256=''; mpcmdrunExit=$LASTEXITCODE; seconds=[int]$sw.Elapsed.TotalSeconds }
+                Remove-Item -Recurse -Force $px
+              }
+              Remove-Item -Recurse -Force $x -ErrorAction SilentlyContinue
+            }
           }
         }
         if (-not $rows) { throw "no files matched: $env:FILES" }
