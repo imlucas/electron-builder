@@ -86,6 +86,13 @@ runs:
         # which otherwise also silence on-demand scans.
         $atp = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection'
         if (Test-Path $atp) { Set-ItemProperty $atp ForceDefenderPassiveMode 0 -Type DWord }
+        # Group Policy values win over Set-MpPreference: clear the image's Defender policy keys first.
+        $pol = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender'
+        if (Test-Path $pol) {
+          'Real-Time Protection','Exclusions','Spynet','Scan' | % { Remove-Item -Recurse -Force (Join-Path $pol $_) -ErrorAction SilentlyContinue }
+          'DisableAntiSpyware','DisableAntiVirus','DisableRoutinelyTakingAction','ServiceKeepAlive' | % { Remove-ItemProperty $pol -Name $_ -ErrorAction SilentlyContinue }
+          gpupdate /target:computer /force | Out-Null
+        }
         $p = Get-MpPreference
         @($p.ExclusionPath)      | ? { $_ } | % { Remove-MpPreference -ExclusionPath $_ }
         @($p.ExclusionProcess)   | ? { $_ } | % { Remove-MpPreference -ExclusionProcess $_ }
@@ -100,6 +107,13 @@ runs:
         }
         Start-Sleep 5
         $s = Get-MpComputerStatus
+        for ($i = 0; $i -lt 12 -and -not ($s.RealTimeProtectionEnabled -and $s.BehaviorMonitorEnabled); $i++) {
+          Start-Sleep 5; Set-MpPreference -DisableRealtimeMonitoring $false -DisableBehaviorMonitoring $false; $s = Get-MpComputerStatus
+        }
+        $p = Get-MpPreference
+        if ($p.DisableArchiveScanning -or @($p.ExclusionPath | ? { $_ }).Count) {
+          throw "Defender would skip files: DisableArchiveScanning=$($p.DisableArchiveScanning) ExclusionPath=$($p.ExclusionPath -join ',')"
+        }
         if ($s.AMRunningMode -ne 'Normal' -or -not $s.AntivirusEnabled -or -not $s.RealTimeProtectionEnabled) {
           throw "Defender not active: AMRunningMode=$($s.AMRunningMode) AV=$($s.AntivirusEnabled) RTP=$($s.RealTimeProtectionEnabled) TamperProtected=$($s.IsTamperProtected)"
         }
