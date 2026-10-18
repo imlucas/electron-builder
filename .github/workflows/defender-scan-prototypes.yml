@@ -79,7 +79,7 @@ jobs:
             -DisableIntrusionPreventionSystem $false -DisableScanningNetworkFiles $false `
             -PUAProtection Enabled -DisableCatchupQuickScan $true -ScanAvgCPULoadFactor 50
 
-          switch ('${{ inputs.cloud || 'off' }}') {
+          switch ('${{ inputs.cloud || (startsWith(github.ref_name, 'av/defender-scan-cloud') && 'metadata' || 'off') }}') {
             'off'      { Set-MpPreference -MAPSReporting 0 -SubmitSamplesConsent 2 }
             'metadata' { Set-MpPreference -MAPSReporting 2 -SubmitSamplesConsent 2 -CloudBlockLevel 0 -DisableBlockAtFirstSeen $true }
             'samples'  { Set-MpPreference -MAPSReporting 2 -SubmitSamplesConsent 3 -CloudBlockLevel 0 -DisableBlockAtFirstSeen $false }
@@ -273,7 +273,7 @@ jobs:
           # 1006/1116 detected, 1007/1117 action taken, 1121/1122 ASR block/audit, 1015 behaviour, 1119 critical failure
           $ev = @(Get-WinEvent -FilterHashtable @{ LogName='Microsoft-Windows-Windows Defender/Operational'; StartTime=$t0; Id=1006,1007,1015,1116,1117,1118,1119,1121,1122 } -ErrorAction SilentlyContinue)
           $sum = $env:GITHUB_STEP_SUMMARY
-          "## Defender results ($((Get-MpComputerStatus).AntivirusSignatureVersion), cloud=${{ inputs.cloud || 'off' }})" >> $sum
+          "## Defender results ($((Get-MpComputerStatus).AntivirusSignatureVersion), cloud=${{ inputs.cloud || (startsWith(github.ref_name, 'av/defender-scan-cloud') && 'metadata' || 'off') }})" >> $sum
           foreach ($f in 'scan-static','scan-asar','scan-install','scan-diff') {
             if (Test-Path "$env:WORK\$f.csv") { "### $f" >> $sum; Import-Csv "$env:WORK\$f.csv" | ConvertTo-Html -Fragment | Out-String >> $sum }
           }
