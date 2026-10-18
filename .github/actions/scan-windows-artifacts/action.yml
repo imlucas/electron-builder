@@ -1,0 +1,254 @@
+# DRAFT composite action (design for upstreaming; not published anywhere).
+# Proposed home: electron-userland/<something>-actions/scan-windows-artifacts, or a docs recipe.
+#
+# Runs Microsoft Defender against Windows release artifacts on a GitHub-hosted windows runner,
+# optionally installs the app silently with real-time/behaviour monitoring on, simulates the
+# electron-updater differential-update write-and-run of the installer, optionally checks
+# VirusTotal (hash lookup by default; upload only with explicit opt-in and the app's own key),
+# and writes a job summary. Modes: warn (annotations only) or fail.
+#
+# Usage:
+#   - uses: ./.github/actions/scan-windows-artifacts
+#     with:
+#       files: |
+#         dist/*Setup*.exe
+#       asar: dist/win-unpacked/resources/app.asar   # scan every member on its own
+#       install: dist/*Setup*.exe        # optional: run it with /S and scan the installed tree
+#       app-dir: postman                 # %LOCALAPPDATA%\Programs\<app-dir> (oneClick per-user default)
+#       updater-cache-dir: postman-updater
+#       mode: fail
+#       cloud: off                       # off | metadata | samples
+#       virustotal: off                  # off | lookup | upload
+#       virustotal-api-key: ${{ secrets.VT_API_KEY }}
+name: Scan Windows artifacts (Defender, optional VirusTotal)
+description: Scan installers / update packages with Microsoft Defender on windows-latest before publishing.
+inputs:
+  files:
+    description: Newline-separated globs of files to scan statically (relative to the workspace).
+    required: true
+  asar:
+    description: >-
+      Newline-separated globs of app.asar files (e.g. dist/win-unpacked/resources/app.asar). Each is
+      extracted member by member and every member is scanned as its own file. Engines generally do
+      not parse asar, and script detections (e.g. Trojan:Script/*) and per-file hash allowlists only
+      apply to individual files, so an installer-level scan alone can miss what users' Defender
+      flags after install. Also scans app.asar.unpacked next to it.
+    default: ""
+  install:
+    description: Optional glob of an NSIS installer to run with /S under real-time protection.
+    default: ""
+  install-args:
+    description: Installer arguments.
+    default: "/S"
+  app-dir:
+    description: Folder under %LOCALAPPDATA%\Programs that the installer creates (per-user oneClick). Used to scan the installed tree and run first launch.
+    default: ""
+  first-run-seconds:
+    description: Launch the installed main exe for this many seconds (0 = skip). Name taken from app-exe.
+    default: "0"
+  app-exe:
+    description: Main executable name inside app-dir (e.g. MyApp.exe).
+    default: ""
+  updater-cache-dir:
+    description: electron-updater cache dir name under %LOCALAPPDATA% (default "<package name>-updater"). When set, the installer is written into <dir>\pending as electron-updater does after a differential download, verified with Get-AuthenticodeSignature, scanned, and run with --updated /S.
+    default: ""
+  mode:
+    description: "warn: report detections as warnings; fail: fail the step on any detection or scan error."
+    default: "fail"
+  cloud:
+    description: "Defender cloud protection: off (default; nothing but signature downloads leaves the runner), metadata (MAPS on, never send samples), samples (MAPS on, send samples: uploads your files to Microsoft)."
+    default: "off"
+  virustotal:
+    description: "off (default) | lookup (send SHA-256 only; reports existing analyses) | upload (uploads files to VirusTotal: they become available to VirusTotal's paying customers and partners)."
+    default: "off"
+  virustotal-api-key:
+    description: The app's own VirusTotal API key (required for lookup/upload).
+    default: ""
+outputs:
+  detections:
+    description: Number of Defender detections (Get-MpThreatDetection + event 1116) during the run.
+    value: ${{ steps.report.outputs.detections }}
+runs:
+  using: composite
+  steps:
+    - name: Check runner
+      shell: pwsh
+      run: |
+        if ($env:RUNNER_OS -ne 'Windows') { throw "scan-windows-artifacts needs a Windows runner (windows-latest)" }
+        if ('${{ inputs.virustotal }}' -ne 'off' -and -not '${{ inputs.virustotal-api-key }}') { throw "virustotal=${{ inputs.virustotal }} needs virustotal-api-key" }
+
+    - name: Enable Defender and assert active
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        # GitHub-hosted images disable Defender (runner-images Configure-WindowsDefender.ps1):
+        # undo real-time/behaviour/IOAV/script/archive-scanning switches and the C:\ D:\ exclusions,
+        # which otherwise also silence on-demand scans.
+        $atp = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection'
+        if (Test-Path $atp) { Set-ItemProperty $atp ForceDefenderPassiveMode 0 -Type DWord }
+        $p = Get-MpPreference
+        @($p.ExclusionPath)      | ? { $_ } | % { Remove-MpPreference -ExclusionPath $_ }
+        @($p.ExclusionProcess)   | ? { $_ } | % { Remove-MpPreference -ExclusionProcess $_ }
+        @($p.ExclusionExtension) | ? { $_ } | % { Remove-MpPreference -ExclusionExtension $_ }
+        Set-MpPreference -DisableRealtimeMonitoring $false -DisableBehaviorMonitoring $false -DisableIOAVProtection $false `
+          -DisableScriptScanning $false -DisableArchiveScanning $false -PUAProtection Enabled -DisableCatchupQuickScan $true
+        switch ('${{ inputs.cloud }}') {
+          'off'      { Set-MpPreference -MAPSReporting 0 -SubmitSamplesConsent 2 }
+          'metadata' { Set-MpPreference -MAPSReporting 2 -SubmitSamplesConsent 2 }
+          'samples'  { Set-MpPreference -MAPSReporting 2 -SubmitSamplesConsent 3 -DisableBlockAtFirstSeen $false }
+          default    { throw "cloud must be off|metadata|samples" }
+        }
+        Start-Sleep 5
+        $s = Get-MpComputerStatus
+        if ($s.AMRunningMode -ne 'Normal' -or -not $s.AntivirusEnabled -or -not $s.RealTimeProtectionEnabled) {
+          throw "Defender not active: AMRunningMode=$($s.AMRunningMode) AV=$($s.AntivirusEnabled) RTP=$($s.RealTimeProtectionEnabled) TamperProtected=$($s.IsTamperProtected)"
+        }
+        $mp = (Get-ChildItem "$env:ProgramData\Microsoft\Windows Defender\Platform\*\MpCmdRun.exe" | Sort FullName | Select -Last 1).FullName
+        if (-not $mp) { $mp = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" }
+        & $mp -SignatureUpdate -MMPC
+        if ($LASTEXITCODE) {
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/?LinkID=121721&arch=x64' -OutFile "$env:RUNNER_TEMP\mpam-fe.exe"
+          Start-Process "$env:RUNNER_TEMP\mpam-fe.exe" -Wait
+        }
+        "AVSCAN_MPCMDRUN=$mp" >> $env:GITHUB_ENV
+        "AVSCAN_T0=$((Get-Date).ToUniversalTime().ToString('o'))" >> $env:GITHUB_ENV
+        "AVSCAN_DIR=$env:RUNNER_TEMP\avscan" >> $env:GITHUB_ENV
+        New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\avscan" | Out-Null
+
+    - name: Static scan
+      shell: pwsh
+      env:
+        FILES: ${{ inputs.files }}
+      run: |
+        $rows = foreach ($g in ($env:FILES -split "`n" | % Trim | ? { $_ })) {
+          foreach ($f in (Get-ChildItem -Path $g -File -ErrorAction SilentlyContinue)) {
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            & $env:AVSCAN_MPCMDRUN -Scan -ScanType 3 -File $f.FullName -DisableRemediation | Out-Host
+            [pscustomobject]@{ phase='static'; file=$f.Name; bytes=$f.Length; sha256=(Get-FileHash $f.FullName).Hash.ToLower(); mpcmdrunExit=$LASTEXITCODE; seconds=[int]$sw.Elapsed.TotalSeconds }
+          }
+        }
+        if (-not $rows) { throw "no files matched: $env:FILES" }
+        $rows | Export-Csv "$env:AVSCAN_DIR\static.csv" -NoTypeInformation
+
+    - name: Scan app.asar members individually
+      if: inputs.asar != ''
+      shell: pwsh
+      env:
+        ASARS: ${{ inputs.asar }}
+      run: |
+        $rows = @(); $i = 0
+        foreach ($g in ($env:ASARS -split "`n" | % Trim | ? { $_ })) {
+          foreach ($a in (Get-ChildItem -Path $g -File)) {
+            $out = Join-Path $env:AVSCAN_DIR "asar$i"; $i++
+            & '${{ github.action_path }}/extract-asar.ps1' -Asar $a.FullName -OutDir $out
+            $since = Get-Date
+            & $env:AVSCAN_MPCMDRUN -Scan -ScanType 3 -File $out -DisableRemediation | Out-Host
+            $rc = $LASTEXITCODE
+            $unpacked = "$($a.FullName).unpacked"
+            if (Test-Path $unpacked) { & $env:AVSCAN_MPCMDRUN -Scan -ScanType 3 -File $unpacked -DisableRemediation | Out-Host; if ($LASTEXITCODE -ne 0) { $rc = $LASTEXITCODE } }
+            # Map detections back to asar member paths (+ SHA-256, which is what a hash-based
+            # false-positive fix would be keyed on; it changes whenever the bundle's bytes change)
+            $hits = @(Get-MpThreatDetection -ErrorAction SilentlyContinue | ? { $_.InitialDetectionTime -ge $since } | % { $_.Resources } | ? { $_ -like "*$out*" -or $_ -like "*$unpacked*" })
+            foreach ($h in $hits) {
+              $file = ($h -replace '^[a-z]+:_?', '')
+              $sha = if (Test-Path -LiteralPath $file) { (Get-FileHash -LiteralPath $file).Hash.ToLower() } else { '' }
+              $rows += [pscustomobject]@{ phase='asar-member'; file=($file.Replace($out, "$($a.Name)!")); sha256=$sha; mpcmdrunExit=$rc }
+            }
+            if (-not $hits) { $rows += [pscustomobject]@{ phase='asar-member'; file="$($a.Name) (all $((Get-ChildItem -Recurse -File $out).Count) members)"; sha256=''; mpcmdrunExit=$rc } }
+            Remove-Item -Recurse -Force $out
+          }
+        }
+        $rows | Export-Csv "$env:AVSCAN_DIR\asar.csv" -NoTypeInformation
+
+    - name: Install, first run, installed-tree scan
+      if: inputs.install != ''
+      shell: pwsh
+      run: |
+        $setup = Get-ChildItem -Path '${{ inputs.install }}' -File | Select -First 1
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $p = Start-Process $setup.FullName -ArgumentList '${{ inputs.install-args }}' -Wait -PassThru
+        $row = [ordered]@{ phase='install'; file=$setup.Name; installerExit=$p.ExitCode; installSeconds=[int]$sw.Elapsed.TotalSeconds }
+        if ('${{ inputs.app-dir }}') {
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\${{ inputs.app-dir }}'
+          & $env:AVSCAN_MPCMDRUN -Scan -ScanType 3 -File $dir -DisableRemediation | Out-Host
+          $row.installedTreeExit = $LASTEXITCODE
+          if ([int]'${{ inputs.first-run-seconds }}' -gt 0 -and '${{ inputs.app-exe }}') {
+            $a = Start-Process (Join-Path $dir '${{ inputs.app-exe }}') -PassThru
+            Start-Sleep ([int]'${{ inputs.first-run-seconds }}')
+            Get-Process -Id $a.Id -ErrorAction SilentlyContinue | Stop-Process -Force
+            Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension('${{ inputs.app-exe }}')) -ErrorAction SilentlyContinue | Stop-Process -Force
+          }
+        }
+        [pscustomobject]$row | Export-Csv "$env:AVSCAN_DIR\install.csv" -NoTypeInformation
+
+    - name: Differential-update output (write to updater cache, verify, scan, run)
+      if: inputs.install != '' && inputs.updater-cache-dir != ''
+      shell: pwsh
+      run: |
+        # A differential download reconstructs a file byte-identical to the published installer
+        # (electron-updater verifies its sha512), so its static verdict equals the installer's. What
+        # differs is behaviour: the app process writes a new exe into %LOCALAPPDATA%, a child
+        # powershell runs Get-AuthenticodeSignature on it, and the app launches it. Reproduce that.
+        $setup = Get-ChildItem -Path '${{ inputs.install }}' -File | Select -First 1
+        $pending = Join-Path $env:LOCALAPPDATA '${{ inputs.updater-cache-dir }}\pending'
+        New-Item -ItemType Directory -Force $pending | Out-Null
+        $tmp = Join-Path $pending "temp-$($setup.Name)"; $final = Join-Path $pending $setup.Name
+        $i = [IO.File]::OpenRead($setup.FullName); $o = [IO.File]::Create($tmp); $b = New-Object byte[] 65536
+        while (($n = $i.Read($b, 0, $b.Length)) -gt 0) { $o.Write($b, 0, $n) }; $i.Close(); $o.Close()
+        Move-Item -Force $tmp $final
+        powershell.exe -NoProfile -NonInteractive -InputFormat None -Command "Get-AuthenticodeSignature -LiteralPath '$final' | ConvertTo-Json -Compress" | Out-Null
+        & $env:AVSCAN_MPCMDRUN -Scan -ScanType 3 -File $final -DisableRemediation | Out-Host
+        $scan = $LASTEXITCODE
+        $p = Start-Process $final -ArgumentList '--updated','/S' -Wait -PassThru
+        [pscustomobject]@{ phase='differential-output'; file=$final; mpcmdrunExit=$scan; installerExit=$p.ExitCode } | Export-Csv "$env:AVSCAN_DIR\diff.csv" -NoTypeInformation
+
+    - name: VirusTotal
+      if: inputs.virustotal != 'off'
+      shell: pwsh
+      env:
+        VT_KEY: ${{ inputs.virustotal-api-key }}
+      run: |
+        $h = @{ 'x-apikey' = $env:VT_KEY }
+        $rows = foreach ($r in (Import-Csv "$env:AVSCAN_DIR\static.csv")) {
+          $f = Get-ChildItem -Recurse -File -Filter $r.file | ? { (Get-FileHash $_.FullName).Hash.ToLower() -eq $r.sha256 } | Select -First 1
+          $rep = $null
+          try { $rep = Invoke-RestMethod -Headers $h "https://www.virustotal.com/api/v3/files/$($r.sha256)" } catch {}
+          if (-not $rep -and '${{ inputs.virustotal }}' -eq 'upload') {
+            if ($f.Length -gt 650MB) { Write-Warning "$($r.file) is larger than VirusTotal's 650 MB limit"; continue }
+            $url = (Invoke-RestMethod -Headers $h 'https://www.virustotal.com/api/v3/files/upload_url').data
+            $an = Invoke-RestMethod -Headers $h -Method Post -Uri $url -Form @{ file = $f }
+            do { Start-Sleep 30; $a = Invoke-RestMethod -Headers $h "https://www.virustotal.com/api/v3/analyses/$($an.data.id)" } while ($a.data.attributes.status -ne 'completed')
+            $rep = Invoke-RestMethod -Headers $h "https://www.virustotal.com/api/v3/files/$($r.sha256)"
+          }
+          $st = $rep.data.attributes.last_analysis_stats
+          $flagged = if ($rep) { ($rep.data.attributes.last_analysis_results.PSObject.Properties | ? { $_.Value.category -in 'malicious','suspicious' } | % { "$($_.Name): $($_.Value.result)" }) -join '; ' }
+          [pscustomobject]@{ file=$r.file; known=[bool]$rep; malicious=$st.malicious; suspicious=$st.suspicious; undetected=$st.undetected; flaggedBy=$flagged }
+        }
+        $rows | Export-Csv "$env:AVSCAN_DIR\virustotal.csv" -NoTypeInformation
+
+    - name: Report
+      id: report
+      if: always()
+      shell: pwsh
+      run: |
+        $t0 = [datetime]::Parse($env:AVSCAN_T0).ToLocalTime()
+        $det = @(Get-MpThreatDetection -ErrorAction SilentlyContinue | ? { $_.InitialDetectionTime -ge $t0 })
+        $ev  = @(Get-WinEvent -FilterHashtable @{ LogName='Microsoft-Windows-Windows Defender/Operational'; StartTime=$t0; Id=1006,1015,1116,1117,1119,1121,1122 } -ErrorAction SilentlyContinue)
+        $names = @{}; Get-MpThreat -ErrorAction SilentlyContinue | % { $names[[string]$_.ThreatID] = $_.ThreatName }
+        $s = $env:GITHUB_STEP_SUMMARY
+        "## Windows artifact scan - Defender $((Get-MpComputerStatus).AntivirusSignatureVersion), cloud=${{ inputs.cloud }}" >> $s
+        foreach ($n in 'static','asar','install','diff','virustotal') {
+          $c = "$env:AVSCAN_DIR\$n.csv"; if (Test-Path $c) { "### $n" >> $s; Import-Csv $c | ConvertTo-Html -Fragment | Out-String >> $s }
+        }
+        "### Detections: $($det.Count)" >> $s
+        foreach ($d in $det) {
+          $msg = "$($names[[string]$d.ThreatID]) ($($d.ThreatID)) in $($d.Resources -join ', ') by $($d.ProcessName)"
+          "- $msg" >> $s
+          if ('${{ inputs.mode }}' -eq 'fail') { "::error title=Defender detection::$msg" } else { "::warning title=Defender detection::$msg" }
+        }
+        foreach ($e in $ev | ? Id -in 1121,1122) { "::warning title=ASR $($e.Id)::$(($e.Message -split "`n")[0..6] -join ' ')" }
+        $errs = @(Get-ChildItem "$env:AVSCAN_DIR\*.csv" | % { Import-Csv $_ } | ? { $_.mpcmdrunExit -and $_.mpcmdrunExit -notin '0','2' })
+        $vt = if (Test-Path "$env:AVSCAN_DIR\virustotal.csv") { @(Import-Csv "$env:AVSCAN_DIR\virustotal.csv" | ? { [int]$_.malicious -gt 0 }) } else { @() }
+        $count = $det.Count + @($ev | ? Id -in 1006,1116).Count + $vt.Count
+        "detections=$count" >> $env:GITHUB_OUTPUT
+        if ('${{ inputs.mode }}' -eq 'fail' -and ($count -gt 0 -or $errs.Count -gt 0)) { throw "AV scan: $count detection(s), $($errs.Count) scan error(s)" }

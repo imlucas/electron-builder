@@ -1,0 +1,298 @@
+# Research workflow (NOT for the electron-builder repo as-is): builds the NSIS app-package layouts
+# under discussion from the public Postman for Windows 12.32.4 payload, then runs Microsoft Defender
+# on a GitHub-hosted windows-latest runner: static scan of each artifact, silent install with
+# real-time + behaviour monitoring ON, re-scan of the installed tree, a simulated differential-update
+# reconstruction (installer written into %LOCALAPPDATA%\<app>-updater\pending + Get-AuthenticodeSignature
+# + run with --updated /S), and a report of Get-MpThreatDetection / Defender event log / ASR audit events.
+#
+# Put it in a throwaway fork (.github/workflows/) together with the action draft folder
+# (.github/actions/scan-windows-artifacts/, for extract-asar.ps1) and run it with "Run workflow".
+#
+# IMPORTANT - Defender on GitHub-hosted Windows runners is DISABLED by the image:
+#   actions/runner-images images/windows/scripts/build/Configure-WindowsDefender.ps1 (used by the
+#   windows-2022 and windows-2025 templates) sets DisableRealtimeMonitoring, DisableBehaviorMonitoring,
+#   DisableIOAVProtection, DisableScriptScanning, DisableArchiveScanning, DisableBlockAtFirstSeen,
+#   MAPSReporting=0, SubmitSamplesConsent=2, PUAProtection=0, ExclusionPath C:\ and D:\, and
+#   ForceDefenderPassiveMode=1 if the ATP policy key exists. Exclusions also apply to on-demand scans,
+#   so a naive "MpCmdRun -Scan" there reports nothing. The "enable-defender" step below undoes all of
+#   that and then ASSERTS the result; the job fails loudly if Defender is not in a scanning state
+#   (AMRunningMode must be "Normal", AntivirusEnabled/RealTimeProtectionEnabled true, no exclusions).
+#
+# Privacy: with cloud=off nothing but signature downloads leaves the runner. cloud=metadata turns on
+# MAPS (cloud-delivered protection: file metadata/hashes are sent to Microsoft, which is where most
+# "!ml" false positives such as Trojan:Win32/Wacatac come from) but SubmitSamplesConsent=2 (never send
+# samples). cloud=samples (SubmitSamplesConsent=3, send all samples) is the most realistic consumer
+# configuration but uploads the files to Microsoft - only choose it for builds you are happy to share.
+name: av-defender-prototypes
+
+on:
+  push:
+    branches: ['av/**']
+  workflow_dispatch:
+    inputs:
+      electron_builder_ref:
+        description: "electron-builder git ref (repo below) to build the installers with"
+        default: "master"
+      electron_builder_repo:
+        description: "electron-builder repository"
+        default: "electron-userland/electron-builder"
+      postman_version:
+        description: "Postman for Windows version used as the payload (public download)"
+        default: "12.32.4"
+      cloud:
+        description: "Defender cloud protection: off | metadata | samples (see header comment)"
+        default: "off"
+      fail_on_detection:
+        description: "Fail the job when Defender reports any detection"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      PM_VERSION: ${{ inputs.postman_version || '12.32.4' }}
+      WORK: ${{ github.workspace }}\av
+    steps:
+      - name: Enable Microsoft Defender (undo runner-image hardening) and assert it is active
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "### Defender status before" >> $env:GITHUB_STEP_SUMMARY
+          Get-MpComputerStatus | Select-Object AMRunningMode,AMServiceEnabled,AntivirusEnabled,RealTimeProtectionEnabled,BehaviorMonitorEnabled,IoavProtectionEnabled,IsTamperProtected,AMProductVersion,AMEngineVersion,AntivirusSignatureVersion | Format-List | Out-String | % { "``````n$_``````" } >> $env:GITHUB_STEP_SUMMARY
+
+          # Passive mode (only meaningful when onboarded to Defender for Endpoint; hosted runners are not)
+          $atp = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection'
+          if (Test-Path $atp) { Set-ItemProperty -Path $atp -Name ForceDefenderPassiveMode -Value 0 -Type DWord }
+
+          $p = Get-MpPreference
+          foreach ($x in @($p.ExclusionPath))      { if ($x) { Remove-MpPreference -ExclusionPath $x } }
+          foreach ($x in @($p.ExclusionProcess))   { if ($x) { Remove-MpPreference -ExclusionProcess $x } }
+          foreach ($x in @($p.ExclusionExtension)) { if ($x) { Remove-MpPreference -ExclusionExtension $x } }
+
+          Set-MpPreference -DisableRealtimeMonitoring $false -DisableBehaviorMonitoring $false `
+            -DisableIOAVProtection $false -DisableScriptScanning $false -DisableArchiveScanning $false `
+            -DisableIntrusionPreventionSystem $false -DisableScanningNetworkFiles $false `
+            -PUAProtection Enabled -DisableCatchupQuickScan $true -ScanAvgCPULoadFactor 50
+
+          switch ('${{ inputs.cloud || 'off' }}') {
+            'off'      { Set-MpPreference -MAPSReporting 0 -SubmitSamplesConsent 2 }
+            'metadata' { Set-MpPreference -MAPSReporting 2 -SubmitSamplesConsent 2 -CloudBlockLevel 0 -DisableBlockAtFirstSeen $true }
+            'samples'  { Set-MpPreference -MAPSReporting 2 -SubmitSamplesConsent 3 -CloudBlockLevel 0 -DisableBlockAtFirstSeen $false }
+            default    { throw "cloud must be off|metadata|samples" }
+          }
+
+          # Attack Surface Reduction rules in AUDIT mode (log only) that plausibly fire on an
+          # unsigned, freshly built installer / an exe reconstructed by an updater:
+          $asr = @(
+            '01443614-cd74-433a-b99e-2ecdc07bfc25', # executables that don't meet prevalence/age/trusted list (needs cloud)
+            'c1db55ab-c21a-4637-bb3f-a12568109d35', # advanced protection against ransomware (needs cloud)
+            '5beb7efe-fd9a-4556-801d-275e5ffc04cc', # potentially obfuscated scripts (AMSI)
+            'c0033c00-d16d-4114-a5a0-dc9b3a7d2ceb'  # copied or impersonated system tools
+          )
+          Add-MpPreference -AttackSurfaceReductionRules_Ids $asr -AttackSurfaceReductionRules_Actions ($asr | % { 'AuditMode' })
+          Start-Sleep -Seconds 5
+
+          $s = Get-MpComputerStatus; $p = Get-MpPreference
+          "### Defender status after" >> $env:GITHUB_STEP_SUMMARY
+          $s | Select-Object AMRunningMode,AntivirusEnabled,RealTimeProtectionEnabled,BehaviorMonitorEnabled,IoavProtectionEnabled,IsTamperProtected | Format-List | Out-String | % { "``````n$_``````" } >> $env:GITHUB_STEP_SUMMARY
+          $bad = @()
+          if ($s.AMRunningMode -ne 'Normal') { $bad += "AMRunningMode=$($s.AMRunningMode)" }
+          if (-not $s.AntivirusEnabled) { $bad += 'AntivirusEnabled=false' }
+          if (-not $s.RealTimeProtectionEnabled) { $bad += 'RealTimeProtectionEnabled=false' }
+          if (-not $s.BehaviorMonitorEnabled) { $bad += 'BehaviorMonitorEnabled=false' }
+          if ($p.DisableArchiveScanning) { $bad += 'DisableArchiveScanning=true' }
+          if (@($p.ExclusionPath | ? { $_ }).Count) { $bad += "ExclusionPath=$($p.ExclusionPath -join ',')" }
+          if ($bad) { throw "Defender is not in a usable scanning state: $($bad -join '; ')" }
+          New-Item -ItemType Directory -Force $env:WORK | Out-Null
+          (Get-Date).ToUniversalTime().ToString('o') | Set-Content "$env:WORK\t0.txt"
+
+      - name: Update Defender signatures
+        shell: pwsh
+        run: |
+          # Windows Update access is disabled by policy on the image, so pull straight from Microsoft's
+          # malware protection center; fall back to the offline definition package.
+          $mp = (Get-ChildItem "$env:ProgramData\Microsoft\Windows Defender\Platform\*\MpCmdRun.exe" | Sort-Object FullName | Select-Object -Last 1).FullName
+          if (-not $mp) { $mp = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" }
+          "MPCMDRUN=$mp" >> $env:GITHUB_ENV
+          & $mp -SignatureUpdate -MMPC
+          if ($LASTEXITCODE -ne 0) {
+            Invoke-WebRequest 'https://go.microsoft.com/fwlink/?LinkID=121721&arch=x64' -OutFile "$env:RUNNER_TEMP\mpam-fe.exe"
+            Start-Process "$env:RUNNER_TEMP\mpam-fe.exe" -Wait
+          }
+          Get-MpComputerStatus | Select AntivirusSignatureVersion,AntivirusSignatureLastUpdated,AMEngineVersion | Format-List
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.electron_builder_repo || 'electron-userland/electron-builder' }}
+          ref: ${{ inputs.electron_builder_ref || 'master' }}
+          path: electron-builder
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: electron-builder/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build electron-builder
+        working-directory: electron-builder
+        shell: pwsh
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm compile
+
+      - name: Fetch public Postman payload
+        shell: pwsh
+        run: |
+          $dl = "$env:WORK\dl"; New-Item -ItemType Directory -Force $dl | Out-Null
+          Invoke-WebRequest "https://dl.pstmn.io/download/version/$env:PM_VERSION/win64" -OutFile "$dl\setup.exe"
+          7z e -y "-o$dl" "$dl\setup.exe" '*.nupkg' | Out-Null
+          7z x -y "-o$dl\pkg" (Get-ChildItem "$dl\*.nupkg").FullName 'lib\net45\*' | Out-Null
+          $pay = "$env:WORK\payload"; Move-Item "$dl\pkg\lib\net45" $pay
+          Remove-Item -Force "$pay\squirrel.exe","$pay\Postman_ExecutionStub.exe" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $dl
+          '{ "name": "postman", "productName": "Postman", "version": "' + $env:PM_VERSION + '", "description": "av", "author": "av", "main": "index.js" }' | Set-Content "$env:WORK\package.json"
+          '{ "appId": "com.av.postman", "electronVersion": "39.0.0", "win": { "sign": false, "target": [{ "target": "nsis", "arch": ["x64"] }] }, "nsis": { "oneClick": true, "perMachine": false } }' | Set-Content "$env:WORK\electron-builder.json"
+
+      - name: Build NSIS installers (compressed, store-asar) and raw 7z prototypes
+        shell: pwsh
+        run: |
+          foreach ($v in 'compressed','store-asar') {
+            node electron-builder\packages\electron-builder\cli.js --projectDir $env:WORK --config "$env:WORK\electron-builder.json" `
+              --win nsis --x64 --prepackaged "$env:WORK\payload" --publish never `
+              "-c.directories.output=$env:WORK\dist-$v" "-c.nsis.differentialPackage=$v"
+            if ($LASTEXITCODE) { throw "electron-builder failed for $v" }
+          }
+          # Raw app-package prototypes for the proposed layouts (not wrapped in an installer).
+          # Built in the payload dir so member paths match what NSIS extracts.
+          Push-Location "$env:WORK\payload"
+          $o = "$env:WORK\proto"; New-Item -ItemType Directory -Force $o | Out-Null
+          7z a -t7z -bso0 -m0=LZMA2:d=1m:c=4m "$o\pinned-c4m.7z" .
+          $pe = Get-ChildItem -Recurse -File | ? { $_.Extension -in '.exe','.dll','.node' } | % { Resolve-Path -Relative $_.FullName }
+          $asar = Get-ChildItem -Recurse -File -Filter app.asar | % { Resolve-Path -Relative $_.FullName }
+          $rest = Get-ChildItem -Recurse -File | % { Resolve-Path -Relative $_.FullName } | ? { $_ -notin $pe -and $_ -notin $asar }
+          $rest | Set-Content "$o\rest.lst"; $pe | Set-Content "$o\pe.lst"; $asar | Set-Content "$o\asar.lst"
+          foreach ($c in '1m','256k') {
+            7z a -t7z -bso0 -ms=off "$o\pe-c$c.7z" "@$o\rest.lst"
+            7z a -t7z -bso0 -ms=off -m0=BCJ "-m1=LZMA2:c=$c" "$o\pe-c$c.7z" "@$o\pe.lst"
+            7z a -t7z -bso0 -m0=Copy "$o\pe-c$c.7z" "@$o\asar.lst"
+          }
+          Pop-Location
+          Get-ChildItem "$env:WORK\dist-*\*.exe","$env:WORK\proto\*.7z" | Select Name,Length | Format-Table | Out-String | Write-Host
+
+      - name: Static scan (MpCmdRun custom scan of each artifact)
+        shell: pwsh
+        run: |
+          $rows = @()
+          $targets = Get-ChildItem "$env:WORK\dist-*\*Setup*.exe","$env:WORK\proto\*.7z"
+          foreach ($t in $targets) {
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $out = & $env:MPCMDRUN -Scan -ScanType 3 -File $t.FullName -DisableRemediation 2>&1 | Out-String
+            $rc = $LASTEXITCODE; $sw.Stop()
+            # 0 = no threats, 2 = threats found, other = scan error (see MpCmdRun log in %TEMP%)
+            $rows += [pscustomobject]@{ phase='static'; target=$t.FullName.Replace($env:WORK,''); bytes=$t.Length; exit=$rc; seconds=[int]$sw.Elapsed.TotalSeconds }
+            Write-Host "== $($t.Name) exit=$rc`n$out"
+          }
+          $rows | Export-Csv "$env:WORK\scan-static.csv" -NoTypeInformation
+
+      - name: Scan every app.asar member individually (Postman incident - script detections inside the asar)
+        shell: pwsh
+        run: |
+          # Requires extract-asar.ps1 from the scan-windows-artifacts action draft, committed in the
+          # fork at .github/actions/scan-windows-artifacts/extract-asar.ps1 (dependency-free asar reader).
+          $out = "$env:WORK\asar-members"
+          & "$env:GITHUB_WORKSPACE\.github\actions\scan-windows-artifacts\extract-asar.ps1" -Asar "$env:WORK\payload\resources\app.asar" -OutDir $out
+          $since = Get-Date
+          & $env:MPCMDRUN -Scan -ScanType 3 -File $out -DisableRemediation | Out-Host
+          $rc = $LASTEXITCODE
+          $hits = @(Get-MpThreatDetection -ErrorAction SilentlyContinue | ? { $_.InitialDetectionTime -ge $since } | % { $_.Resources })
+          # Known candidates from the Postman Defender incidents (1Password SDK bundles); hash them so a
+          # later release can be compared (bundle content hash in the file name changes per build).
+          $op = Get-ChildItem -Recurse -File $out | ? Name -like '*1password*' | % { $n = $_.Name; [pscustomobject]@{ phase='asar-member'; target=$n; bytes=$_.Length; sha256=(Get-FileHash $_.FullName).Hash.ToLower(); exit=$rc; detected=[bool]($hits | ? { $_ -like "*$n*" }) } }
+          @([pscustomobject]@{ phase='asar-member'; target="all $((Get-ChildItem -Recurse -File $out).Count) members"; bytes=''; sha256=''; exit=$rc; detected=($hits -join '; ') }) + $op | Export-Csv "$env:WORK\scan-asar.csv" -NoTypeInformation
+          Remove-Item -Recurse -Force $out
+
+      - name: Silent install with real-time protection, then scan installed tree
+        shell: pwsh
+        run: |
+          $rows = @()
+          foreach ($v in 'compressed','store-asar') {
+            $setup = Get-ChildItem "$env:WORK\dist-$v\*Setup*.exe" | Select -First 1
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $p = Start-Process $setup.FullName -ArgumentList '/S' -Wait -PassThru
+            $sw.Stop()
+            $dir = "$env:LOCALAPPDATA\Programs\postman"
+            $out = & $env:MPCMDRUN -Scan -ScanType 3 -File $dir -DisableRemediation 2>&1 | Out-String
+            $rows += [pscustomobject]@{ phase="install-$v"; target=$dir; installerExit=$p.ExitCode; installSeconds=[int]$sw.Elapsed.TotalSeconds; scanExit=$LASTEXITCODE; asarPresent=(Test-Path "$dir\resources\app.asar") }
+            # First run: start the app briefly so behaviour monitoring sees it (headless runner; kill after 20 s)
+            $app = Start-Process "$dir\Postman.exe" -PassThru -ErrorAction SilentlyContinue
+            Start-Sleep 20; if ($app) { Get-Process -Name Postman -ErrorAction SilentlyContinue | Stop-Process -Force }
+            $un = Get-ChildItem "$dir\Uninstall*.exe" | Select -First 1
+            if ($un) { Start-Process $un.FullName -ArgumentList '/S' -Wait; Start-Sleep 5 }
+          }
+          $rows | Export-Csv "$env:WORK\scan-install.csv" -NoTypeInformation
+          $rows | Format-Table | Out-String | Write-Host
+
+      - name: Simulate differential-update reconstruction (write ~installer-size exe into %LOCALAPPDATA%, verify, run)
+        shell: pwsh
+        run: |
+          # Mimics electron-updater: the updater process (here pwsh) writes the reconstructed installer
+          # block by block into <cacheDir>\pending\temp-<name>, renames it, verifies it with a child
+          # powershell Get-AuthenticodeSignature, then runs it with --updated /S.
+          $setup = Get-ChildItem "$env:WORK\dist-store-asar\*Setup*.exe" | Select -First 1
+          Start-Process (Get-ChildItem "$env:WORK\dist-compressed\*Setup*.exe" | Select -First 1).FullName -ArgumentList '/S' -Wait
+          $pending = "$env:LOCALAPPDATA\postman-updater\pending"; New-Item -ItemType Directory -Force $pending | Out-Null
+          $tmp = Join-Path $pending ("temp-" + $setup.Name); $final = Join-Path $pending $setup.Name
+          $in = [IO.File]::OpenRead($setup.FullName); $outF = [IO.File]::Create($tmp)
+          $buf = New-Object byte[] (64KB)
+          while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) { $outF.Write($buf, 0, $n) }
+          $in.Close(); $outF.Close()
+          Move-Item -Force $tmp $final
+          powershell.exe -NoProfile -NonInteractive -InputFormat None -Command "Get-AuthenticodeSignature -LiteralPath '$final' | ConvertTo-Json -Compress" | Out-Null
+          $out = & $env:MPCMDRUN -Scan -ScanType 3 -File $final -DisableRemediation 2>&1 | Out-String
+          $scanExit = $LASTEXITCODE
+          $p = Start-Process $final -ArgumentList '--updated','/S' -Wait -PassThru
+          [pscustomobject]@{ phase='differential-sim'; target=$final; scanExit=$scanExit; installerExit=$p.ExitCode } | Export-Csv "$env:WORK\scan-diff.csv" -NoTypeInformation
+
+      - name: Report Get-MpThreatDetection, Defender events, ASR audit events
+        if: always()
+        shell: pwsh
+        run: |
+          $t0 = [datetime]::Parse((Get-Content "$env:WORK\t0.txt")).ToLocalTime()
+          $det = @(Get-MpThreatDetection -ErrorAction SilentlyContinue | ? { $_.InitialDetectionTime -ge $t0 })
+          $threats = @(Get-MpThreat -ErrorAction SilentlyContinue)
+          # 1006/1116 detected, 1007/1117 action taken, 1121/1122 ASR block/audit, 1015 behaviour, 1119 critical failure
+          $ev = @(Get-WinEvent -FilterHashtable @{ LogName='Microsoft-Windows-Windows Defender/Operational'; StartTime=$t0; Id=1006,1007,1015,1116,1117,1118,1119,1121,1122 } -ErrorAction SilentlyContinue)
+          $sum = $env:GITHUB_STEP_SUMMARY
+          "## Defender results ($((Get-MpComputerStatus).AntivirusSignatureVersion), cloud=${{ inputs.cloud || 'off' }})" >> $sum
+          foreach ($f in 'scan-static','scan-asar','scan-install','scan-diff') {
+            if (Test-Path "$env:WORK\$f.csv") { "### $f" >> $sum; Import-Csv "$env:WORK\$f.csv" | ConvertTo-Html -Fragment | Out-String >> $sum }
+          }
+          "### Get-MpThreatDetection since start: $($det.Count)" >> $sum
+          if ($det) { $det | Select InitialDetectionTime,ThreatID,ProcessName,@{n='Resources';e={$_.Resources -join '; '}},ActionSuccess | ConvertTo-Html -Fragment | Out-String >> $sum
+                      $threats | Select ThreatID,ThreatName,SeverityID | ConvertTo-Html -Fragment | Out-String >> $sum }
+          "### Defender operational events: $($ev.Count)" >> $sum
+          if ($ev) { $ev | Select TimeCreated,Id,@{n='Message';e={($_.Message -split "`n" | Select -First 12) -join ' '}} | ConvertTo-Html -Fragment | Out-String >> $sum }
+          $det | ConvertTo-Json -Depth 4 | Set-Content "$env:WORK\threat-detections.json"
+          $ev | Select TimeCreated,Id,Message | ConvertTo-Json -Depth 3 | Set-Content "$env:WORK\defender-events.json"
+          Copy-Item "$env:TEMP\MpCmdRun.log" "$env:WORK\" -ErrorAction SilentlyContinue
+          if ('${{ inputs.fail_on_detection || 'false' }}' -eq 'true' -and ($det.Count -gt 0 -or @($ev | ? Id -in 1006,1116,1121).Count -gt 0)) { throw "Defender reported detections" }
+
+      - name: Upload report (no binaries)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: defender-report
+          path: |
+            av/*.csv
+            av/*.json
+            av/MpCmdRun.log
