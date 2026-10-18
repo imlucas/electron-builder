@@ -1,0 +1,85 @@
+# Throwaway install test for M2: a mac update zip with app.asar stored (not deflated) and fixed
+# timestamps, built with 7-Zip as electron-builder does. Uses Postman's public, signed and notarized
+# arm64 build. Each zip is unpacked with ditto (as Squirrel.Mac does) and checked with codesign,
+# spctl (Gatekeeper, also with the quarantine flag set), stapler, a file-tree comparison against
+# the original app, and a 20 s launch.
+name: mac-zip-store-asar-test
+on:
+  push:
+    branches: ['test/mac-zip-store-asar']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  m2:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      V: "12.32.4"
+    steps:
+      - name: Tools
+        run: |
+          brew install sevenzip >/dev/null
+          7zz | head -2
+          sw_vers; uname -m
+
+      - name: Fetch Postman (public, notarized) and unpack it with ditto
+        run: |
+          mkdir -p "$RUNNER_TEMP/w" && cd "$RUNNER_TEMP/w"
+          curl -fsSL -o postman-original.zip "https://dl.pstmn.io/download/version/$V/osx_arm64"
+          mkdir src && ditto -x -k postman-original.zip src
+          ls src
+          # file tree fingerprint: path, mode, sha256 (or link target)
+          (cd src && find . -type f -print0 | sort -z | xargs -0 shasum -a 256 > ../tree-files.txt; find . -type l | sort | while read l; do echo "$l -> $(readlink "$l")"; done > ../tree-links.txt; find . -type f -print0 | sort -z | xargs -0 stat -f '%Lp %N' > ../tree-modes.txt)
+          wc -l tree-*.txt
+          xattr -lr src/Postman.app | grep -c 'com.apple' || true
+
+      - name: Build zips (today's electron-builder 7-Zip zip, and M2)
+        run: |
+          cd "$RUNNER_TEMP/w/src"
+          ASAR="Postman.app/Contents/Resources/app.asar"
+          # electron-builder today: compute7zCompressArgs("zip") + -snl
+          7zz a -tzip -bso0 -bsp0 -mx=7 -mtc=off -mm=Deflate -mcu -snl ../eb-today.zip Postman.app
+          # M2: compressed pass without the asar, then the asar appended with Copy; fixed timestamps in both passes
+          7zz a -tzip -bso0 -bsp0 -mx=7 -mtc=off -mtm=off -mm=Deflate -mcu -snl ../m2.zip Postman.app "-x!$ASAR"
+          7zz a -tzip -bso0 -bsp0 -mx=0 -mtc=off -mtm=off -mm=Copy -mcu -snl ../m2.zip "$ASAR"
+          cd ..; ls -l *.zip
+          7zz l -slt m2.zip | awk '/^Path = .*app\.asar$/{p=1} p&&/^(Path|Method|Modified|Size)/{print} p&&/^Size/{exit}'
+
+      - name: Unpack each zip with ditto and verify
+        run: |
+          cd "$RUNNER_TEMP/w"
+          fail=0
+          for z in postman-original eb-today m2; do
+            for q in plain quarantined; do
+              d="x-$z-$q"; rm -rf "$d"; mkdir "$d"
+              cp "$z.zip" "$d.zip"
+              if [ "$q" = quarantined ]; then xattr -w com.apple.quarantine "0083;$(printf %x $(date +%s));Safari;$(uuidgen)" "$d.zip"; fi
+              ditto -x -k "$d.zip" "$d"
+              app="$d/Postman.app"
+              cs=$(codesign --verify --deep --strict --verbose=2 "$app" 2>&1 | tail -1)
+              gk=$(spctl --assess --type execute -vv "$app" 2>&1 | head -2 | tr '\n' ' ')
+              st=$(xcrun stapler validate "$app" 2>&1 | tail -1)
+              (cd "$d" && find . -type f -print0 | sort -z | xargs -0 shasum -a 256) > "$d.files"
+              (cd "$d" && find . -type l | sort | while read l; do echo "$l -> $(readlink "$l")"; done) > "$d.links"
+              (cd "$d" && find . -type f -print0 | sort -z | xargs -0 stat -f '%Lp %N') > "$d.modes"
+              same_files=$(cmp -s "$d.files" tree-files.txt && echo yes || echo NO)
+              same_links=$(cmp -s "$d.links" tree-links.txt && echo yes || echo NO)
+              same_modes=$(cmp -s "$d.modes" tree-modes.txt && echo yes || echo NO)
+              mt=$(stat -f '%Sm' "$app/Contents/Resources/app.asar")
+              echo "== $z ($q): codesign: $cs | gatekeeper: $gk | stapler: $st | files=$same_files links=$same_links modes=$same_modes | asar mtime: $mt"
+              case "$cs" in *"valid on disk"*|*"satisfies its Designated Requirement"*) ;; *) fail=1;; esac
+              [ "$same_files$same_links" = yesyes ] || { fail=1; diff "$d.files" tree-files.txt | head -10; diff "$d.links" tree-links.txt | head -10; }
+            done
+          done
+          exit $fail
+
+      - name: Launch the app unpacked from the M2 zip for 20 s
+        run: |
+          cd "$RUNNER_TEMP/w"
+          app="x-m2-quarantined/Postman.app"
+          "$app/Contents/MacOS/Postman" > launch.log 2>&1 &
+          pid=$!
+          sleep 20
+          if kill -0 $pid 2>/dev/null; then echo "alive after 20 s"; kill $pid; else echo "exited early"; tail -40 launch.log; exit 1; fi
+          pkill -f "x-m2-quarantined/Postman.app" || true
