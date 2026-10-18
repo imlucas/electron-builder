@@ -340,3 +340,63 @@ jobs:
             av/*.csv
             av/*.json
             av/MpCmdRun.log
+
+  # End-to-end test of the composite action itself, as an app would use it.
+  action:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      PM_VERSION: ${{ inputs.postman_version || '12.32.4' }}
+      WORK: ${{ github.workspace }}\av
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.electron_builder_repo || 'electron-userland/electron-builder' }}
+          ref: ${{ inputs.electron_builder_ref || 'master' }}
+          path: electron-builder
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: electron-builder/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build electron-builder
+        working-directory: electron-builder
+        shell: pwsh
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm compile
+      - name: Build store-asar installer from the public Postman payload
+        shell: pwsh
+        run: |
+          $dl = "$env:WORK\dl"; New-Item -ItemType Directory -Force $dl | Out-Null
+          Invoke-WebRequest "https://dl.pstmn.io/download/version/$env:PM_VERSION/win64" -OutFile "$dl\setup.exe"
+          7z e -y "-o$dl" "$dl\setup.exe" '*.nupkg' | Out-Null
+          7z x -y "-o$dl\pkg" (Get-ChildItem "$dl\*.nupkg").FullName 'lib\net45\*' | Out-Null
+          $pay = "$env:WORK\payload"; Move-Item "$dl\pkg\lib\net45" $pay
+          Remove-Item -Force "$pay\squirrel.exe","$pay\Postman_ExecutionStub.exe" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $dl
+          '{ "name": "postman", "productName": "Postman", "version": "' + $env:PM_VERSION + '", "description": "av", "author": "av", "main": "index.js" }' | Set-Content "$env:WORK\package.json"
+          '{ "appId": "com.av.postman", "electronVersion": "39.0.0", "win": { "sign": false, "target": [{ "target": "nsis", "arch": ["x64"] }] }, "nsis": { "oneClick": true, "perMachine": false, "differentialPackage": "store-asar" } }' | Set-Content "$env:WORK\electron-builder.json"
+          node electron-builder\packages\electron-builder\cli.js --projectDir $env:WORK --config "$env:WORK\electron-builder.json" `
+            --win nsis --x64 --prepackaged "$env:WORK\payload" --publish never "-c.directories.output=$env:WORK\dist"
+          if ($LASTEXITCODE) { throw "electron-builder failed" }
+      - id: av
+        uses: ./.github/actions/scan-windows-artifacts
+        with:
+          files: |
+            av/dist/*Setup*.exe
+          asar: av/payload/resources/app.asar
+          install: av/dist/*Setup*.exe
+          app-dir: postman
+          app-exe: Postman.exe
+          first-run-seconds: 20
+          updater-cache-dir: postman-updater
+          mode: warn
+          cloud: ${{ inputs.cloud || (startsWith(github.ref_name, 'av/defender-scan-cloud') && 'metadata' || 'off') }}
+      - name: Action output
+        shell: pwsh
+        run: '"detections=${{ steps.av.outputs.detections }}"'
