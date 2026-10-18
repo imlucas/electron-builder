@@ -21,10 +21,17 @@ function Test-FirstRun {
   "Postman processes already running before launch: $($running.Count) $(($running | % { $_.Path } | Select -Unique) -join ', ')"
   $running | Stop-Process -Force -ErrorAction SilentlyContinue
   Start-Sleep 5
-  $p = Start-Process "$env:LOCALAPPDATA\Programs\postman\Postman.exe" -PassThru
+  $log = "$env:RUNNER_TEMP\postman-run-$([guid]::NewGuid().ToString('n'))"
+  $p = Start-Process "$env:LOCALAPPDATA\Programs\postman\Postman.exe" -ArgumentList '--enable-logging=stderr' -PassThru `
+    -RedirectStandardOutput "$log.out" -RedirectStandardError "$log.err"
   Start-Sleep 20
   $alive = -not $p.HasExited
   Get-Process -Name Postman -ErrorAction SilentlyContinue | Stop-Process -Force
   "first run: alive after 20 s = $alive"
-  if (-not $alive) { throw "Postman exited within 20 s (exit code $($p.ExitCode))" }
+  if (-not $alive) {
+    "--- Postman stdout ---"; Get-Content "$log.out" -Tail 40 -ErrorAction SilentlyContinue
+    "--- Postman stderr ---"; Get-Content "$log.err" -Tail 80 -ErrorAction SilentlyContinue
+    Get-ChildItem "$env:APPDATA\Postman" -ErrorAction SilentlyContinue | Select Name,Length,LastWriteTime | Format-Table | Out-String | Write-Host
+    throw "Postman exited within 20 s (exit code $($p.ExitCode))"
+  }
 }

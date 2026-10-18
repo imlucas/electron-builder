@@ -12,10 +12,16 @@ permissions:
   contents: read
 jobs:
   w4:
+    strategy:
+      fail-fast: false
+      matrix:
+        layout: [baseline, w4]
+    name: ${{ matrix.layout }}
     runs-on: windows-latest
     timeout-minutes: 120
     env:
       WORK: ${{ github.workspace }}\w
+      LAYOUT: ${{ matrix.layout }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,7 +69,7 @@ jobs:
             $proj = "$env:WORK\proj-$v"; New-Item -ItemType Directory -Force $proj | Out-Null
             '{ "name": "postman", "productName": "Postman", "version": "' + $v + '", "description": "w4", "author": "w4", "main": "index.js" }' | Set-Content "$proj\package.json"
             '{ "appId": "com.w4.postman", "electronVersion": "37.10.3", "win": { "sign": false, "target": [{ "target": "nsis", "arch": ["x64"] }] }, "nsis": { "oneClick": true, "perMachine": false, "differentialPackage": "store-asar" }, "blockmap": "v2" }' | Set-Content "$proj\electron-builder.json"
-            foreach ($layout in 'baseline','w4') {
+            foreach ($layout in @($env:LAYOUT)) {
               $env:ELECTRON_BUILDER_PE_BLOCKS = $(if ($layout -eq 'w4') { '1' } else { '' })
               node eb\packages\electron-builder\cli.js --projectDir $proj --config "$proj\electron-builder.json" `
                 --win nsis --x64 --prepackaged "$env:WORK\payload-$v" --publish never "-c.directories.output=$env:WORK\dist-$layout-$v"
@@ -73,6 +79,7 @@ jobs:
           Get-ChildItem "$env:WORK\dist-*\*.exe","$env:WORK\dist-*\*.blockmap" | Select @{n='file';e={$_.FullName.Substring($env:WORK.Length+1)}},Length | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 
       - name: Inspect the W4 app package
+        if: matrix.layout == 'w4'
         shell: pwsh
         run: |
           $setup = Get-ChildItem "$env:WORK\dist-w4-12.32.4\*Setup*.exe" | Select -First 1
@@ -85,7 +92,7 @@ jobs:
           $entries | ? { $_.Path -match '\.(exe|dll)$' -or $_.Path -match 'app\.asar$' } | Select Path,Method,Block,Size | Format-Table -AutoSize | Out-String -Width 220 | Write-Host
           "folders (blocks): " + (($slt | Select-String '^Blocks = ').Line)
 
-      - name: Install W4 12.32.3, verify against payload, first run
+      - name: Install 12.32.3, verify against payload, first run
         shell: pwsh
         run: |
           . "$env:GITHUB_WORKSPACE\helpers.ps1"
@@ -95,7 +102,7 @@ jobs:
           Test-Install '12.32.3'
           Test-FirstRun
 
-      - name: Update to W4 12.32.4 (--updated /S), verify, first run, uninstall
+      - name: Update to 12.32.4 (--updated /S), verify, first run, uninstall
         shell: pwsh
         run: |
           . "$env:GITHUB_WORKSPACE\helpers.ps1"
