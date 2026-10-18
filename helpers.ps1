@@ -15,6 +15,12 @@ function Test-Install([string]$v) {
 }
 
 function Test-FirstRun {
+  # The installer may already have started the app (an --updated install relaunches it); a second instance would lose
+  # Electron's single-instance lock and exit 1, so report and stop running instances first.
+  $running = @(Get-Process -Name Postman -ErrorAction SilentlyContinue)
+  "Postman processes already running before launch: $($running.Count) $(($running | % { $_.Path } | Select -Unique) -join ', ')"
+  $running | Stop-Process -Force -ErrorAction SilentlyContinue
+  Start-Sleep 5
   $p = Start-Process "$env:LOCALAPPDATA\Programs\postman\Postman.exe" -PassThru
   Start-Sleep 20
   $alive = -not $p.HasExited
