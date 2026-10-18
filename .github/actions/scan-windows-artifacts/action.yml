@@ -126,11 +126,22 @@ runs:
         }
         $mp = (Get-ChildItem "$env:ProgramData\Microsoft\Windows Defender\Platform\*\MpCmdRun.exe" | Sort FullName | Select -Last 1).FullName
         if (-not $mp) { $mp = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" }
-        & $mp -SignatureUpdate -MMPC
-        if ($LASTEXITCODE) {
+        # Signature update: MMPC first (Windows Update is blocked by policy on the image), retried because the
+        # endpoint times out now and then (0x80072ee2), then the offline package. Fail only if signatures stay stale.
+        $updated = $false
+        foreach ($i in 1..3) {
+          & $mp -SignatureUpdate -MMPC | Out-Host
+          if ($LASTEXITCODE -eq 0) { $updated = $true; break }
+          Start-Sleep 10
+        }
+        if (-not $updated) {
           Invoke-WebRequest 'https://go.microsoft.com/fwlink/?LinkID=121721&arch=x64' -OutFile "$env:RUNNER_TEMP\mpam-fe.exe"
           Start-Process "$env:RUNNER_TEMP\mpam-fe.exe" -Wait
         }
+        $s = Get-MpComputerStatus
+        "signatures $($s.AntivirusSignatureVersion), updated $($s.AntivirusSignatureLastUpdated)" | Out-Host
+        if ($s.AntivirusSignatureAge -gt 2) { throw "Defender signatures are $($s.AntivirusSignatureAge) days old after the update attempts" }
+        $global:LASTEXITCODE = 0
         "AVSCAN_MPCMDRUN=$mp" >> $env:GITHUB_ENV
         "AVSCAN_T0=$((Get-Date).ToUniversalTime().ToString('o'))" >> $env:GITHUB_ENV
         "AVSCAN_DIR=$env:RUNNER_TEMP\avscan" >> $env:GITHUB_ENV
