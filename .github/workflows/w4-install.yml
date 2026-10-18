@@ -1,0 +1,110 @@
+# Throwaway install test for the W4 prototype (exe/dll members compressed with small LZMA2 blocks).
+# Builds Postman 12.32.3 and 12.32.4 NSIS installers from the public payloads with electron-builder
+# (imlucas/electron-builder test/w4-src, store-asar layout), baseline and W4, then on a real Windows
+# runner: installs W4 12.32.3 silently, checks every installed file against the payload, runs it,
+# updates to W4 12.32.4 with --updated /S, checks again, runs it, and uninstalls.
+name: w4-install-test
+on:
+  push:
+    branches: ['test/w4-install']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  w4:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      WORK: ${{ github.workspace }}\w
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: imlucas/electron-builder
+          ref: test/w4-src
+          path: eb
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: eb/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build electron-builder
+        working-directory: eb
+        shell: pwsh
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm compile
+
+      - name: Fetch public Postman payloads and hash them
+        shell: pwsh
+        run: |
+          foreach ($v in '12.32.3','12.32.4') {
+            $dl = "$env:WORK\dl-$v"; New-Item -ItemType Directory -Force $dl | Out-Null
+            Invoke-WebRequest "https://dl.pstmn.io/download/version/$v/win64" -OutFile "$dl\setup.exe"
+            7z e -y "-o$dl" "$dl\setup.exe" '*.nupkg' | Out-Null
+            7z x -y "-o$dl\pkg" (Get-ChildItem "$dl\*.nupkg").FullName 'lib\net45\*' | Out-Null
+            $pay = "$env:WORK\payload-$v"; Move-Item "$dl\pkg\lib\net45" $pay
+            Remove-Item -Force "$pay\squirrel.exe","$pay\Postman_ExecutionStub.exe" -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force $dl
+            # hash before building: electron-builder copies elevate.exe into the prepackaged dir
+            Get-ChildItem -Recurse -File $pay | % { [pscustomobject]@{ path = $_.FullName.Substring($pay.Length + 1); sha256 = (Get-FileHash $_.FullName).Hash } } |
+              Export-Csv "$env:WORK\manifest-$v.csv" -NoTypeInformation
+            "$v payload: $((Import-Csv "$env:WORK\manifest-$v.csv").Count) files"
+          }
+
+      - name: Build installers (store-asar; baseline and W4) for both versions
+        shell: pwsh
+        run: |
+          foreach ($v in '12.32.3','12.32.4') {
+            $proj = "$env:WORK\proj-$v"; New-Item -ItemType Directory -Force $proj | Out-Null
+            '{ "name": "postman", "productName": "Postman", "version": "' + $v + '", "description": "w4", "author": "w4", "main": "index.js" }' | Set-Content "$proj\package.json"
+            '{ "appId": "com.w4.postman", "electronVersion": "37.10.3", "win": { "sign": false, "target": [{ "target": "nsis", "arch": ["x64"] }] }, "nsis": { "oneClick": true, "perMachine": false, "differentialPackage": "store-asar" }, "blockmap": "v2" }' | Set-Content "$proj\electron-builder.json"
+            foreach ($layout in 'baseline','w4') {
+              $env:ELECTRON_BUILDER_PE_BLOCKS = $(if ($layout -eq 'w4') { '1' } else { '' })
+              node eb\packages\electron-builder\cli.js --projectDir $proj --config "$proj\electron-builder.json" `
+                --win nsis --x64 --prepackaged "$env:WORK\payload-$v" --publish never "-c.directories.output=$env:WORK\dist-$layout-$v"
+              if ($LASTEXITCODE) { throw "electron-builder failed: $layout $v" }
+            }
+          }
+          Get-ChildItem "$env:WORK\dist-*\*.exe","$env:WORK\dist-*\*.blockmap" | Select @{n='file';e={$_.FullName.Substring($env:WORK.Length+1)}},Length | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+
+      - name: Inspect the W4 app package
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem "$env:WORK\dist-w4-12.32.4\*Setup*.exe" | Select -First 1
+          $x = "$env:RUNNER_TEMP\nsis-w4"; 7z x -y "-o$x" $setup.FullName | Out-Null
+          $pkg = Get-ChildItem -Recurse -File $x -Filter 'app-64.7z' | Select -First 1
+          $slt = 7z l -slt $pkg.FullName
+          $entries = @(); $cur = @{}
+          foreach ($line in $slt) { if ($line -match '^Path = (.*)') { if ($cur.Path) { $entries += [pscustomobject]$cur }; $cur = @{ Path = $Matches[1] } } elseif ($line -match '^(Method|Block|Size) = (.*)') { $cur[$Matches[1]] = $Matches[2] } }
+          if ($cur.Path) { $entries += [pscustomobject]$cur }
+          $entries | ? { $_.Path -match '\.(exe|dll)$' -or $_.Path -match 'app\.asar$' } | Select Path,Method,Block,Size | Format-Table -AutoSize | Out-String -Width 220 | Write-Host
+          "folders (blocks): " + (($slt | Select-String '^Blocks = ').Line)
+
+      - name: Install W4 12.32.3, verify against payload, first run
+        shell: pwsh
+        run: |
+          . "$env:GITHUB_WORKSPACE\helpers.ps1"
+          $setup = Get-ChildItem "$env:WORK\dist-w4-12.32.3\*Setup*.exe" | Select -First 1
+          $p = Start-Process $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          "install exit code: $($p.ExitCode)"; if ($p.ExitCode) { throw "install failed" }
+          Test-Install '12.32.3'
+          Test-FirstRun
+
+      - name: Update to W4 12.32.4 (--updated /S), verify, first run, uninstall
+        shell: pwsh
+        run: |
+          . "$env:GITHUB_WORKSPACE\helpers.ps1"
+          $setup = Get-ChildItem "$env:WORK\dist-w4-12.32.4\*Setup*.exe" | Select -First 1
+          $p = Start-Process $setup.FullName -ArgumentList '--updated','/S' -Wait -PassThru
+          "update exit code: $($p.ExitCode)"; if ($p.ExitCode) { throw "update install failed" }
+          Test-Install '12.32.4'
+          Test-FirstRun
+          $un = Get-ChildItem "$env:LOCALAPPDATA\Programs\postman\Uninstall*.exe" | Select -First 1
+          $p = Start-Process $un.FullName -ArgumentList '/S' -Wait -PassThru
+          Start-Sleep 5
+          "uninstall exit code: $($p.ExitCode); Postman.exe left behind: $(Test-Path "$env:LOCALAPPDATA\Programs\postman\Postman.exe")"
