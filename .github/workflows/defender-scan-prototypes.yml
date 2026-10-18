@@ -69,6 +69,16 @@ jobs:
           $atp = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection'
           if (Test-Path $atp) { Set-ItemProperty -Path $atp -Name ForceDefenderPassiveMode -Value 0 -Type DWord }
 
+          # Group Policy values override Set-MpPreference: clear the runner image's Defender policy keys first.
+          $pol = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender'
+          if (Test-Path $pol) {
+            "Defender policy keys before:" | Out-Host
+            Get-ChildItem -Recurse $pol -ErrorAction SilentlyContinue | % { $_.Name; Get-ItemProperty $_.PSPath | Out-String } | Out-Host
+            Get-ItemProperty $pol | Out-String | Out-Host
+            foreach ($k in @('Real-Time Protection','Exclusions','Spynet','Scan')) { Remove-Item -Recurse -Force (Join-Path $pol $k) -ErrorAction SilentlyContinue }
+            foreach ($v in @('DisableAntiSpyware','DisableAntiVirus','DisableRoutinelyTakingAction','ServiceKeepAlive')) { Remove-ItemProperty -Path $pol -Name $v -ErrorAction SilentlyContinue }
+            gpupdate /target:computer /force | Out-Null
+          }
           $p = Get-MpPreference
           foreach ($x in @($p.ExclusionPath))      { if ($x) { Remove-MpPreference -ExclusionPath $x } }
           foreach ($x in @($p.ExclusionProcess))   { if ($x) { Remove-MpPreference -ExclusionProcess $x } }
@@ -79,7 +89,7 @@ jobs:
             -DisableIntrusionPreventionSystem $false -DisableScanningNetworkFiles $false `
             -PUAProtection Enabled -DisableCatchupQuickScan $true -ScanAvgCPULoadFactor 50
 
-          switch ('${{ inputs.cloud || 'off' }}') {
+          switch ('${{ inputs.cloud || (startsWith(github.ref_name, 'av/defender-scan-cloud') && 'metadata' || 'off') }}') {
             'off'      { Set-MpPreference -MAPSReporting 0 -SubmitSamplesConsent 2 }
             'metadata' { Set-MpPreference -MAPSReporting 2 -SubmitSamplesConsent 2 -CloudBlockLevel 0 -DisableBlockAtFirstSeen $true }
             'samples'  { Set-MpPreference -MAPSReporting 2 -SubmitSamplesConsent 3 -CloudBlockLevel 0 -DisableBlockAtFirstSeen $false }
@@ -103,8 +113,18 @@ jobs:
           $bad = @()
           if ($s.AMRunningMode -ne 'Normal') { $bad += "AMRunningMode=$($s.AMRunningMode)" }
           if (-not $s.AntivirusEnabled) { $bad += 'AntivirusEnabled=false' }
-          if (-not $s.RealTimeProtectionEnabled) { $bad += 'RealTimeProtectionEnabled=false' }
-          if (-not $s.BehaviorMonitorEnabled) { $bad += 'BehaviorMonitorEnabled=false' }
+          for ($i = 0; $i -lt 12 -and -not ($s.RealTimeProtectionEnabled -and $s.BehaviorMonitorEnabled); $i++) {
+            Start-Sleep -Seconds 5; Set-MpPreference -DisableRealtimeMonitoring $false -DisableBehaviorMonitoring $false; $s = Get-MpComputerStatus
+          }
+          # On-demand scans only need the engine, signatures and no exclusions. Real-time/behaviour
+          # monitoring only matter for the install/first-run phase: warn instead of failing.
+          $degraded = @()
+          if (-not $s.RealTimeProtectionEnabled) { $degraded += 'RealTimeProtectionEnabled=false' }
+          if (-not $s.BehaviorMonitorEnabled) { $degraded += 'BehaviorMonitorEnabled=false' }
+          if ($degraded) {
+            "::warning::Install-time behaviour results are degraded: $($degraded -join '; ')" | Out-Host
+            "> **Degraded:** $($degraded -join '; '). Static and asar-member scans are valid; install/first-run detections are not." >> $env:GITHUB_STEP_SUMMARY
+          }
           if ($p.DisableArchiveScanning) { $bad += 'DisableArchiveScanning=true' }
           if (@($p.ExclusionPath | ? { $_ }).Count) { $bad += "ExclusionPath=$($p.ExclusionPath -join ',')" }
           if ($bad) { throw "Defender is not in a usable scanning state: $($bad -join '; ')" }
@@ -273,7 +293,7 @@ jobs:
           # 1006/1116 detected, 1007/1117 action taken, 1121/1122 ASR block/audit, 1015 behaviour, 1119 critical failure
           $ev = @(Get-WinEvent -FilterHashtable @{ LogName='Microsoft-Windows-Windows Defender/Operational'; StartTime=$t0; Id=1006,1007,1015,1116,1117,1118,1119,1121,1122 } -ErrorAction SilentlyContinue)
           $sum = $env:GITHUB_STEP_SUMMARY
-          "## Defender results ($((Get-MpComputerStatus).AntivirusSignatureVersion), cloud=${{ inputs.cloud || 'off' }})" >> $sum
+          "## Defender results ($((Get-MpComputerStatus).AntivirusSignatureVersion), cloud=${{ inputs.cloud || (startsWith(github.ref_name, 'av/defender-scan-cloud') && 'metadata' || 'off') }})" >> $sum
           foreach ($f in 'scan-static','scan-asar','scan-install','scan-diff') {
             if (Test-Path "$env:WORK\$f.csv") { "### $f" >> $sum; Import-Csv "$env:WORK\$f.csv" | ConvertTo-Html -Fragment | Out-String >> $sum }
           }
