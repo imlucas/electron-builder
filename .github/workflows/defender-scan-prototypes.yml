@@ -222,6 +222,28 @@ jobs:
             $rows += [pscustomobject]@{ phase='static'; target=$t.FullName.Replace($env:WORK,''); bytes=$t.Length; exit=$rc; seconds=[int]$sw.Elapsed.TotalSeconds }
             Write-Host "== $($t.Name) exit=$rc`n$out"
           }
+          # The installer scans above finish in ~1 s, so check whether Defender unpacks NSIS at all:
+          # (a) scan a fresh copy under a new name (no cached verdict for that path),
+          # (b) unpack the installer ourselves and scan the embedded app package and its contents.
+          foreach ($v in 'compressed','store-asar') {
+            $setup = Get-ChildItem "$env:WORK\dist-$v\*Setup*.exe" | Select -First 1
+            $fresh = "$env:RUNNER_TEMP\fresh-$v-$([guid]::NewGuid().ToString('n')).exe"
+            Copy-Item $setup.FullName $fresh
+            $sw = [Diagnostics.Stopwatch]::StartNew(); & $env:MPCMDRUN -Scan -ScanType 3 -File $fresh -DisableRemediation | Out-Host; $rc = $LASTEXITCODE; $sw.Stop()
+            $rows += [pscustomobject]@{ phase='static-fresh-copy'; target="$v installer (fresh copy)"; bytes=$setup.Length; exit=$rc; seconds=[int]$sw.Elapsed.TotalSeconds }
+            $x = "$env:RUNNER_TEMP\nsis-$v"; 7z x -y "-o$x" $setup.FullName | Out-Null
+            $pkg = Get-ChildItem -Recurse -File $x -Filter '*.7z' | Select -First 1
+            if ($pkg) {
+              $sw = [Diagnostics.Stopwatch]::StartNew(); & $env:MPCMDRUN -Scan -ScanType 3 -File $pkg.FullName -DisableRemediation | Out-Host; $rc = $LASTEXITCODE; $sw.Stop()
+              $rows += [pscustomobject]@{ phase='static-embedded-7z'; target="$v $($pkg.Name)"; bytes=$pkg.Length; exit=$rc; seconds=[int]$sw.Elapsed.TotalSeconds }
+              $px = "$env:RUNNER_TEMP\pkg-$v"; 7z x -y "-o$px" $pkg.FullName | Out-Null
+              $n = (Get-ChildItem -Recurse -File $px).Count
+              $sw = [Diagnostics.Stopwatch]::StartNew(); & $env:MPCMDRUN -Scan -ScanType 3 -File $px -DisableRemediation | Out-Host; $rc = $LASTEXITCODE; $sw.Stop()
+              $rows += [pscustomobject]@{ phase='static-embedded-extracted'; target="$v package contents ($n files)"; bytes=''; exit=$rc; seconds=[int]$sw.Elapsed.TotalSeconds }
+              Remove-Item -Recurse -Force $px
+            } else { $rows += [pscustomobject]@{ phase='static-embedded-7z'; target="$v: no .7z found inside installer"; bytes=''; exit=''; seconds='' } }
+            Remove-Item -Recurse -Force $x, $fresh -ErrorAction SilentlyContinue
+          }
           $rows | Export-Csv "$env:WORK\scan-static.csv" -NoTypeInformation
 
       - name: Scan every app.asar member individually (Postman incident - script detections inside the asar)
