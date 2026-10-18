@@ -96,7 +96,7 @@ jobs:
         shell: pwsh
         run: |
           . "$env:GITHUB_WORKSPACE\helpers.ps1"
-          $setup = Get-ChildItem "$env:WORK\dist-w4-12.32.3\*Setup*.exe" | Select -First 1
+          $setup = Get-ChildItem "$env:WORK\dist-$env:LAYOUT-12.32.3\*Setup*.exe" | Select -First 1
           $p = Start-Process $setup.FullName -ArgumentList '/S' -Wait -PassThru
           "install exit code: $($p.ExitCode)"; if ($p.ExitCode) { throw "install failed" }
           Test-Install '12.32.3'
@@ -106,7 +106,7 @@ jobs:
         shell: pwsh
         run: |
           . "$env:GITHUB_WORKSPACE\helpers.ps1"
-          $setup = Get-ChildItem "$env:WORK\dist-w4-12.32.4\*Setup*.exe" | Select -First 1
+          $setup = Get-ChildItem "$env:WORK\dist-$env:LAYOUT-12.32.4\*Setup*.exe" | Select -First 1
           $p = Start-Process $setup.FullName -ArgumentList '--updated','/S' -Wait -PassThru
           "update exit code: $($p.ExitCode)"; if ($p.ExitCode) { throw "update install failed" }
           Test-Install '12.32.4'
