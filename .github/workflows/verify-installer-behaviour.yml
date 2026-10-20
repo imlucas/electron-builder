@@ -48,6 +48,7 @@ jobs:
 
       - name: Argument order, unsigned
         run: |
+          set +e
           W="$RUNNER_TEMP/w"; cd "$W"
           {
             echo "## Argument order (${{ matrix.runner }})"
@@ -83,6 +84,7 @@ jobs:
 
       - name: Sign with and without --timestamp
         run: |
+          set +e
           W="$RUNNER_TEMP/w"; cd "$W"
           {
             echo "## Signing (${{ matrix.runner }})"
