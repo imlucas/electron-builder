@@ -71,7 +71,8 @@ jobs:
             -subj "/CN=EB Test Installer" \
             -addext "basicConstraints=critical,CA:false" \
             -addext "keyUsage=critical,digitalSignature" \
-            -addext "extendedKeyUsage=critical,codeSigning,1.2.840.113635.100.4.13"
+            -addext "extendedKeyUsage=critical,1.2.840.113635.100.4.13" \
+            -addext "1.2.840.113635.100.6.1.14=DER:05:00"
           "$OPENSSL" pkcs12 -export -legacy -inkey key.pem -in cert.pem -out id.p12 -passout pass:pw
           security create-keychain -p pw eb.keychain
           security set-keychain-settings eb.keychain
