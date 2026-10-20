@@ -1,0 +1,177 @@
+# Fork-only verification for two electron-builder changes. Not intended for upstream.
+#
+# macOS: does `productbuild --sign` add a secure timestamp by default, and does productbuild accept options placed
+# after the output path (where `pkg.productbuild` passthrough arguments end up in pkg.ts)?
+#
+# Windows: where does an MSI with electron-builder's default scope (ALLUSERS=2, MSIINSTALLPERUSER=1) install when a
+# management tool runs it as SYSTEM, compared with a per-machine MSI (ALLUSERS=1)?
+name: Verify installer behaviour
+
+on:
+  push:
+    branches:
+      - verify/pkg-productbuild-timestamp
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  productbuild:
+    name: productbuild signing (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-26]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Build a minimal app bundle
+        run: |
+          set -euo pipefail
+          W="$RUNNER_TEMP/w"
+          mkdir -p "$W/Test.app/Contents/MacOS"
+          cat > "$W/Test.app/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleIdentifier</key><string>com.example.ebtest</string>
+            <key>CFBundleExecutable</key><string>Test</string>
+            <key>CFBundleName</key><string>Test</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleVersion</key><string>1.0.0</string>
+            <key>CFBundleShortVersionString</key><string>1.0.0</string>
+          </dict></plist>
+          PLIST
+          printf '#!/bin/sh\nexit 0\n' > "$W/Test.app/Contents/MacOS/Test"
+          chmod +x "$W/Test.app/Contents/MacOS/Test"
+          sw_vers
+
+      - name: Argument order, unsigned
+        run: |
+          W="$RUNNER_TEMP/w"; cd "$W"
+          {
+            echo "## Argument order (${{ matrix.runner }})"
+            echo
+            echo "| Command | Exit |"
+            echo "| --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          run() { local label="$1"; shift; "$@" > "$label.log" 2>&1; local rc=$?; echo "| \`$label\` | $rc |" >> "$GITHUB_STEP_SUMMARY"; echo "== $label exit $rc"; cat "$label.log"; }
+          run "options-before-output" productbuild --quiet --component Test.app /Applications before.pkg
+          run "quiet-after-output" productbuild --component Test.app /Applications after-quiet.pkg --quiet
+          run "timestamp-none-after-output" productbuild --component Test.app /Applications after-ts.pkg --timestamp=none
+          ls -la *.pkg || true
+
+      - name: Create a self-signed installer identity
+        run: |
+          set -euo pipefail
+          W="$RUNNER_TEMP/w"; cd "$W"
+          OPENSSL="$(brew --prefix openssl@3)/bin/openssl"
+          "$OPENSSL" req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 2 \
+            -subj "/CN=EB Test Installer" \
+            -addext "basicConstraints=critical,CA:false" \
+            -addext "keyUsage=critical,digitalSignature" \
+            -addext "extendedKeyUsage=critical,codeSigning,1.2.840.113635.100.4.13"
+          "$OPENSSL" pkcs12 -export -legacy -inkey key.pem -in cert.pem -out id.p12 -passout pass:pw
+          security create-keychain -p pw eb.keychain
+          security set-keychain-settings eb.keychain
+          security unlock-keychain -p pw eb.keychain
+          security import id.p12 -k eb.keychain -P pw -T /usr/bin/productbuild -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple: -s -k pw eb.keychain > /dev/null
+          security list-keychains -d user -s eb.keychain $(security list-keychains -d user | tr -d '"')
+          sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain cert.pem
+          security find-identity -v eb.keychain || true
+
+      - name: Sign with and without --timestamp
+        run: |
+          W="$RUNNER_TEMP/w"; cd "$W"
+          {
+            echo "## Signing (${{ matrix.runner }})"
+            echo
+            echo "| Variant | productbuild exit | pkgutil --check-signature |"
+            echo "| --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          variant() {
+            local label="$1"; shift
+            "$@" > "$label.build.log" 2>&1; local rc=$?
+            local sig="(no package)"
+            if [ -f "$label.pkg" ]; then
+              pkgutil --check-signature "$label.pkg" > "$label.sig.log" 2>&1 || true
+              sig="$(grep -iE 'timestamp|Status|no signature' "$label.sig.log" | tr '\n' ';' | sed 's/|/\\|/g')"
+            fi
+            echo "| \`$label\` | $rc | $sig |" >> "$GITHUB_STEP_SUMMARY"
+            echo "== $label exit $rc"; cat "$label.build.log"; cat "$label.sig.log" 2>/dev/null || true
+          }
+          ID="EB Test Installer"; KC="eb.keychain"
+          # electron-builder today: --sign with no timestamp flag (prepareProductBuildArgs in pkg.ts)
+          variant "default" productbuild --sign "$ID" --keychain "$KC" --component Test.app /Applications default.pkg
+          # explicit --timestamp before the output path
+          variant "timestamp-before" productbuild --sign "$ID" --keychain "$KC" --timestamp --component Test.app /Applications timestamp-before.pkg
+          # --timestamp after the output path, where pkg.productbuild passthrough lands today
+          variant "timestamp-after" productbuild --sign "$ID" --keychain "$KC" --component Test.app /Applications timestamp-after.pkg --timestamp
+          # explicit opt-out, for comparison
+          variant "timestamp-none" productbuild --sign "$ID" --keychain "$KC" --timestamp=none --component Test.app /Applications timestamp-none.pkg
+
+  msi-system-context:
+    name: MSI scope under SYSTEM (windows-2025)
+    runs-on: windows-2025
+    steps:
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 4.0.5
+          wix --version
+
+      - name: Build two MSIs, default scope and per-machine
+        shell: pwsh
+        run: |
+          $w = Join-Path $env:RUNNER_TEMP 'msi'
+          New-Item -ItemType Directory -Force $w | Out-Null
+          Set-Content (Join-Path $w 'hello.txt') 'hello'
+          function New-Wxs($name, $scope, $upgrade) {
+            @"
+          <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+            <Package Name="$name" Manufacturer="EbScopeTest" Version="1.0.0" UpgradeCode="$upgrade" Scope="$scope">
+              <MediaTemplate EmbedCab="yes" />
+              <StandardDirectory Id="ProgramFiles64Folder">
+                <Directory Id="INSTALLFOLDER" Name="$name" />
+              </StandardDirectory>
+              <Feature Id="Main">
+                <Component Directory="INSTALLFOLDER" Guid="*">
+                  <File Source="hello.txt" />
+                </Component>
+              </Feature>
+            </Package>
+          </Wix>
+          "@ | Set-Content (Join-Path $w "$name.wxs")
+          }
+          # perUserOrMachine = ALLUSERS=2 + MSIINSTALLPERUSER=1, the same pair electron-builder's template emits by default
+          New-Wxs 'EbDefaultScope' 'perUserOrMachine' '{6F0F0A2B-1B7C-4D3E-9A11-2C3D4E5F6A71}'
+          New-Wxs 'EbPerMachine' 'perMachine' '{6F0F0A2B-1B7C-4D3E-9A11-2C3D4E5F6A72}'
+          Push-Location $w
+          wix build -arch x64 EbDefaultScope.wxs -o EbDefaultScope.msi
+          wix build -arch x64 EbPerMachine.wxs -o EbPerMachine.msi
+          Pop-Location
+          Get-ChildItem $w *.msi
+
+      - name: Install each MSI as SYSTEM and record where it landed
+        shell: pwsh
+        run: |
+          $w = Join-Path $env:RUNNER_TEMP 'msi'
+          $summary = @('## MSI install location when run as SYSTEM', '', '| MSI | Exit | Program Files | SYSTEM profile (AppData\Local\Programs) |', '| --- | --- | --- | --- |')
+          foreach ($name in 'EbDefaultScope', 'EbPerMachine') {
+            $msi = Join-Path $w "$name.msi"
+            $log = Join-Path $w "$name.log"
+            $done = Join-Path $w "$name.done"
+            $cmd = "cmd /c msiexec /i `"$msi`" /qn /l*v `"$log`" & echo %ERRORLEVEL% > `"$done`""
+            schtasks /create /tn "eb-$name" /tr $cmd /sc once /st 23:59 /ru SYSTEM /f | Out-Null
+            schtasks /run /tn "eb-$name" | Out-Null
+            $deadline = (Get-Date).AddMinutes(5)
+            while (-not (Test-Path $done) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+            $exit = if (Test-Path $done) { (Get-Content $done).Trim() } else { 'timeout' }
+            $pf = Test-Path "C:\Program Files\$name\hello.txt"
+            $sys = Test-Path "C:\Windows\System32\config\systemprofile\AppData\Local\Programs\$name\hello.txt"
+            $summary += "| $name | $exit | $pf | $sys |"
+            Write-Host "== $name exit=$exit programFiles=$pf systemProfile=$sys"
+            if (Test-Path $log) { Select-String -Path $log -Pattern 'ALLUSERS|MSIINSTALLPERUSER|INSTALLFOLDER|Product: ' | Select-Object -Last 15 | ForEach-Object { $_.Line } }
+          }
+          $summary -join "`n" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
