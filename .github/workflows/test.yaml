@@ -116,6 +116,8 @@ jobs:
           # Extract individual platform arrays
           LINUX_SHARDS=$(echo "$SHARD_JSON" | jq -c '.linux')
           WINDOWS_SHARDS=$(echo "$SHARD_JSON" | jq -c '.win32')
+          # TEMPORARY (tmp/e2e-win-ci only): the Windows job runs a single TEST_FILES file, which plans one shard
+          WINDOWS_SHARDS='[0]'
           MACOS_SHARDS=$(echo "$SHARD_JSON" | jq -c '.darwin')
 
           # Set outputs
