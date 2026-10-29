@@ -9,6 +9,7 @@ import { Platform } from "app-builder-lib"
 import { createUpdateInfoTasks, writeUpdateInfoFiles } from "app-builder-lib/internal"
 import { BlockMapRegion, buildBlockMap, ChunkerParams, chunkFile, DEFAULT_CHUNKER } from "app-builder-lib/src/targets/blockmap/blockmap.js"
 import { buildBlockMapV3 } from "app-builder-lib/src/targets/blockmap/blockmapV3.js"
+import { isBinaryBlockMapReader } from "app-builder-lib/src/util/electronUpdaterCompatibility.js"
 import {
   BLOCK_MAP_FILE_SUFFIX,
   createBlockmap,
@@ -329,14 +330,14 @@ describe("createBlockmap — one .blockmap, in the `blockmap` format", () => {
 
   it("resolves the option from electronUpdaterCompatibility: binary when the range allows only electron-updater 7+, JSON otherwise", ({ expect }) => {
     expect(LATEST_BLOCK_MAP_FORMAT).toBe("v3")
-    for (const range of [">=7", ">=7.0.0", "^7.1.0", ">=8"]) {
+    for (const range of [">=7", ">=7.0.0", "^7.1.0", ">=8", ">=6.9.0", "^6.9.0 || >=7"]) {
       expect(resolveBlockMapFormat(undefined, range)).toBe("v3")
       expect(resolveBlockMapFormat(null, range)).toBe("v3")
       expect(resolveBlockMapFormat("latest", range)).toBe("v3")
       expect(resolveBlockMapFormat("v3", range)).toBe("v3")
       expect(resolveBlockMapFormat("v2", range)).toBe("v2")
     }
-    for (const range of [">=2.16", ">=6", ">=6.8.10", "*", "<7"]) {
+    for (const range of [">=2.16", ">=6", ">=6.8.10", ">=6.8.12", "*", "<7"]) {
       expect(resolveBlockMapFormat(undefined, range)).toBe("v2")
       expect(resolveBlockMapFormat("latest", range)).toBe("v2")
       expect(resolveBlockMapFormat("v2", range)).toBe("v2")
@@ -345,8 +346,18 @@ describe("createBlockmap — one .blockmap, in the `blockmap` format", () => {
     expect(() => resolveBlockMapFormat("v3", ">=6")).toThrow(
       /blockmap "v3" .* electronUpdaterCompatibility ">=6" includes earlier versions.*v27-build-changes#block-map-format-follows-electronupdatercompatibility/
     )
+    expect(() => resolveBlockMapFormat("v3", ">=6")).toThrow(/Raise electronUpdaterCompatibility to ">=6\.9\.0"/)
     expect(() => resolveBlockMapFormat("v1", ">=7")).toThrow(/"blockmap" must be "v2", "v3" or "latest"/)
     expect(() => resolveBlockMapFormat(2, ">=7")).toThrow(/"blockmap" must be "v2", "v3" or "latest"/)
+  })
+
+  it("knows which electron-updater versions read the binary block map: 6.9.0 and later 6.x, and 7 from 7.0.0-alpha.13", ({ expect }) => {
+    for (const version of ["6.9.0", "6.9.1", "6.12.0", "7.0.0-alpha.13", "7.0.0-beta.0", "7.0.0", "7.3.1", "8.0.0-alpha.0"]) {
+      expect(isBinaryBlockMapReader(version), version).toBe(true)
+    }
+    for (const version of ["4.0.0", "6.8.12", "6.9.0-beta.1", "7.0.0-alpha.0", "7.0.0-alpha.12"]) {
+      expect(isBinaryBlockMapReader(version), version).toBe(false)
+    }
   })
 
   it("warns once per process, naming v27, the reason and the fix, when the range makes the build write JSON block maps", async ({ expect }) => {
@@ -372,11 +383,11 @@ describe("createBlockmap — one .blockmap, in the `blockmap` format", () => {
       expect(once.mock.calls.every(([key]) => key === "json-block-map")).toBe(true)
       expect(warnings).toHaveLength(1)
       expect(warnings[0].message).toMatch(
-        /electron-builder v27 writes binary block maps.*electronUpdaterCompatibility includes electron-updater versions before 7\.0\.0.*JSON block maps/
+        /electron-builder v27 writes binary block maps.*electronUpdaterCompatibility includes electron-updater versions before 6\.9\.0.*JSON block maps/
       )
       expect(warnings[0].fields).toEqual({
         electronUpdaterCompatibility: ">=6",
-        solution: 'raise electronUpdaterCompatibility to ">=7" once your installed apps ship electron-updater 7.0.0',
+        solution: 'raise electronUpdaterCompatibility to ">=6.9.0" once your installed apps ship electron-updater 6.9.0 or 7',
         docs: "https://www.electron.build/docs/migration/v27-build-changes#block-map-format-follows-electronupdatercompatibility",
       })
     } finally {

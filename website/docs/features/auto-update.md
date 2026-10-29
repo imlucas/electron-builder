@@ -267,10 +267,10 @@ Since electron-builder 27 the generated `latest*.yml` targets the modern `files[
 
 The `electronUpdaterCompatibility` option sets the electron-updater compatibility semver range: the electron-updater versions your installed apps ship, which have to read the update files a build publishes (e.g. `>=7`, `>=6`, `>=1.0.0`). Can be specified per platform (e.g. `win.electronUpdaterCompatibility`). Defaults to `>=7`. The range decides:
 
-* the [`.blockmap` format](#differential-updates-blockmap): the binary map for a range that includes only electron-updater 7 and later, the JSON map (with a build warning) for a range that includes earlier versions;
+* the [`.blockmap` format](#differential-updates-blockmap): the binary map for a range that includes only electron-updater versions that read it (6.9.0 and later, e.g. `>=7` or `>=6.9.0`), the JSON map (with a build warning) for a range that includes earlier versions;
 * the legacy fields emitted in addition to `files[]`: the top-level `path`/`sha512` and the Windows `sha2` checksum for ranges intersecting `<2.16.0`, and the old `latest-mac.json` for ranges intersecting `<2.0.0`.
 
-The build fails when the app's own electron-updater is outside the range of a platform it builds (for example electron-updater 6 with the default `>=7`): upgrade it, or declare a range that includes it. The app's electron-updater is the one in `dependencies`, else in `devDependencies` (bundled by webpack, vite and the like), else, with two package.json files, in the development package.json. Where the build writes binary `.blockmap` files (an NSIS installer, a macOS zip), electron-updater 7.0.0-alpha.0 to 7.0.0-alpha.12, which cannot read it, fail the build as well: upgrade to 7.0.0-alpha.13 or later, or set `blockmap` to `"v2"`.
+The build fails when the app's own electron-updater is outside the range of a platform it builds (for example electron-updater 6 with the default `>=7`): upgrade it, or declare a range that includes it. The app's electron-updater is the one in `dependencies`, else in `devDependencies` (bundled by webpack, vite and the like), else, with two package.json files, in the development package.json. Where the build writes binary `.blockmap` files (an NSIS installer, a macOS zip), an electron-updater that cannot read it fails the build as well: 6.x before 6.9.0 (with a range such as `>=6`, the build writes the JSON map instead) and 7.0.0-alpha.0 to 7.0.0-alpha.12. Upgrade to 6.9.0 or 7.0.0-alpha.13 or later, or set `blockmap` to `"v2"`.
 
 Metadata format history:
 

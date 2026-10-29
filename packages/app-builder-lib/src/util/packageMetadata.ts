@@ -6,7 +6,9 @@ import * as path from "path"
 import * as semver from "semver"
 import { Metadata } from "../options/metadata.js"
 import {
+  BINARY_BLOCK_MAP_MIN_UPDATER,
   BINARY_BLOCK_MAP_MIN_UPDATER_RELEASE,
+  isBinaryBlockMapReader,
   BLOCK_MAP_FORMAT_DOCS_URL,
   DEFAULT_ELECTRON_UPDATER_COMPATIBILITY,
   ElectronUpdaterRequirement,
@@ -238,7 +240,8 @@ function checkElectronUpdater(metadata: Metadata, devMetadata: any | null, error
     const platforms = unsatisfied.map(it => it.platform).join(", ")
     errors.push(
       `electron-updater ${version}${source} does not satisfy electronUpdaterCompatibility ${ranges} of ${platforms} (the default is "${DEFAULT_ELECTRON_UPDATER_COMPATIBILITY}" since electron-builder 27). ` +
-        `Upgrade electron-updater to 7, or set electronUpdaterCompatibility to a range that includes "<7" (e.g. ">=6"), which switches the build to the JSON block map. ` +
+        `Upgrade electron-updater to 7, or set electronUpdaterCompatibility to a range that includes it: ">=${BINARY_BLOCK_MAP_MIN_UPDATER}" keeps the binary block map ` +
+        `(electron-updater ${BINARY_BLOCK_MAP_MIN_UPDATER} and later read it), a range that includes earlier versions (e.g. ">=6") switches the build to the JSON block map. ` +
         `See ${BLOCK_MAP_FORMAT_DOCS_URL}`
     )
     return
@@ -246,12 +249,12 @@ function checkElectronUpdater(metadata: Metadata, devMetadata: any | null, error
 
   const lowest = lowestVersion(version)
   const binary = requirements.filter(it => it.binaryBlockMap)
-  if (lowest == null || binary.length === 0 || semver.gte(lowest, BINARY_BLOCK_MAP_MIN_UPDATER_RELEASE)) {
+  if (lowest == null || binary.length === 0 || isBinaryBlockMapReader(lowest)) {
     return
   }
   errors.push(
     `electron-updater ${version}${source} cannot read the binary block map the build writes for ${binary.map(it => it.platform).join(", ")}: ` +
-      `electron-updater reads it from ${BINARY_BLOCK_MAP_MIN_UPDATER_RELEASE}. Upgrade electron-updater, or set "blockmap" to "v2" to write the JSON block map. ` +
+      `electron-updater reads it from ${BINARY_BLOCK_MAP_MIN_UPDATER} (6.x) and ${BINARY_BLOCK_MAP_MIN_UPDATER_RELEASE} (7). Upgrade electron-updater, or set "blockmap" to "v2" to write the JSON block map. ` +
       `See ${BLOCK_MAP_FORMAT_DOCS_URL}`
   )
 }

@@ -8,19 +8,33 @@ export const DEFAULT_ELECTRON_UPDATER_COMPATIBILITY = ">=7"
 /** v27 breaking-changes entry on the block map format following `electronUpdaterCompatibility`, linked from the build warning and error. */
 export const BLOCK_MAP_FORMAT_DOCS_URL = "https://www.electron.build/docs/migration/v27-build-changes#block-map-format-follows-electronupdatercompatibility"
 
-/** electron-updater versions before this one cannot read the binary block map; for ranges (`electronUpdaterCompatibility`). */
-export const BINARY_BLOCK_MAP_MIN_UPDATER = "7.0.0"
+/**
+ * electron-updater versions before this one cannot read the binary block map; for ranges (`electronUpdaterCompatibility`). The v26 line
+ * reads it from this release on (a backport of the reader), so a range such as `>=6.9.0` or `^6.9.0 || >=7` allows it.
+ */
+export const BINARY_BLOCK_MAP_MIN_UPDATER = "6.9.0"
 
 /**
- * The first electron-updater release that reads the binary block map: the 7.0.0 prereleases up to 7.0.0-alpha.12 (npm `next`)
+ * The first electron-updater 7 release that reads the binary block map: the 7.0.0 prereleases up to 7.0.0-alpha.12 (npm `next`)
  * cannot, though a range such as `>=7` reads as electron-updater 7.
  */
 export const BINARY_BLOCK_MAP_MIN_UPDATER_RELEASE = "7.0.0-alpha.13"
 
 /** Whether the `electronUpdaterCompatibility` range includes only electron-updater versions that read the binary block map. */
 export function isBinaryBlockMapSupported(range: string): boolean {
-  // no includePrerelease: it would make ">=7" intersect "<7.0.0" at the 7.0.0-0 prerelease point
+  // no includePrerelease: it would make ">=7" intersect the 7.0.0 prereleases, which isBinaryBlockMapReader tells apart for an installed version
   return !semver.intersects(range, `<${BINARY_BLOCK_MAP_MIN_UPDATER}`)
+}
+
+/**
+ * Whether an electron-updater `version` reads the binary block map: 6.9.0 and later 6.x releases, and 7 from 7.0.0-alpha.13 on. A 7.0.0
+ * prerelease before that is a 7.0.0 prerelease, not a 6.x release, so it cannot.
+ */
+export function isBinaryBlockMapReader(version: semver.SemVer | string): boolean {
+  if (semver.gte(version, BINARY_BLOCK_MAP_MIN_UPDATER_RELEASE)) {
+    return true
+  }
+  return semver.gte(version, BINARY_BLOCK_MAP_MIN_UPDATER) && semver.lt(version, "7.0.0-0")
 }
 
 /**

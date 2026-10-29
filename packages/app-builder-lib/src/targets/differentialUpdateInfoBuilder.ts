@@ -47,8 +47,8 @@ export function resolveBlockMapFormat(value: unknown, electronUpdaterCompatibili
     if (!binarySupported) {
       throw new InvalidConfigurationError(
         `blockmap "v3" (the binary block map) needs electron-updater ${BINARY_BLOCK_MAP_MIN_UPDATER} or later in the installed apps, but electronUpdaterCompatibility ` +
-          `"${electronUpdaterCompatibility}" includes earlier versions. Raise electronUpdaterCompatibility to ">=7" once your installed apps ship electron-updater 7, ` +
-          `or set blockmap to "v2". See ${BLOCK_MAP_FORMAT_DOCS_URL}`
+          `"${electronUpdaterCompatibility}" includes earlier versions. Raise electronUpdaterCompatibility to ">=${BINARY_BLOCK_MAP_MIN_UPDATER}" once your installed apps ` +
+          `ship electron-updater ${BINARY_BLOCK_MAP_MIN_UPDATER} or 7, or set blockmap to "v2". See ${BLOCK_MAP_FORMAT_DOCS_URL}`
       )
     }
     return "v3"
@@ -70,7 +70,7 @@ function warnAboutJsonBlockMap(electronUpdaterCompatibility: string): void {
   log.once("json-block-map").warn(
     {
       electronUpdaterCompatibility,
-      solution: `raise electronUpdaterCompatibility to ">=7" once your installed apps ship electron-updater ${BINARY_BLOCK_MAP_MIN_UPDATER}`,
+      solution: `raise electronUpdaterCompatibility to ">=${BINARY_BLOCK_MAP_MIN_UPDATER}" once your installed apps ship electron-updater ${BINARY_BLOCK_MAP_MIN_UPDATER} or 7`,
       docs: BLOCK_MAP_FORMAT_DOCS_URL,
     },
     `electron-builder v27 writes binary block maps, which electron-updater fetches in parts, but electronUpdaterCompatibility includes electron-updater ` +

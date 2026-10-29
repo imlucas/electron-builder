@@ -175,7 +175,7 @@ describe("checkMetadata electron-updater version validation", () => {
     test('the default (">=7") rejects an installed electron-updater 6.x, naming both ways out and the docs', async ({ tmpDir }) => {
       await withProjectDir(tmpDir, "6.8.10", projectDir => {
         expect(() => checkDependencies({ "electron-updater": "^6.8.10" }, projectDir, DEFAULT)).toThrow(
-          /electron-updater 6\.8\.10 does not satisfy electronUpdaterCompatibility ">=7" of windows.*Upgrade electron-updater to 7, or set electronUpdaterCompatibility to a range that includes "<7".*v27-build-changes#block-map-format-follows-electronupdatercompatibility/s
+          /electron-updater 6\.8\.10 does not satisfy electronUpdaterCompatibility ">=7" of windows.*Upgrade electron-updater to 7, or set electronUpdaterCompatibility to a range that includes it: ">=6\.9\.0" keeps the binary block map.*\(e\.g\. ">=6"\) switches the build to the JSON block map.*v27-build-changes#block-map-format-follows-electronupdatercompatibility/s
         )
       })
     })
@@ -186,6 +186,25 @@ describe("checkMetadata electron-updater version validation", () => {
           expect(() => checkDependencies({ "electron-updater": `^${version}` }, projectDir, DEFAULT, [Platform.WINDOWS, Platform.MAC])).not.toThrow()
         })
       }
+    })
+
+    test("electron-updater 6.9.0 and later 6.x read the binary block map: a >=6.9.0 range keeps it, earlier 6.x is rejected", async ({ tmpDir }) => {
+      const binary = { electronUpdaterCompatibility: ">=6.9.0" }
+      for (const version of ["6.9.0", "6.9.3", "6.10.0"]) {
+        await withProjectDir(tmpDir, version, projectDir => {
+          expect(() => checkDependencies({ "electron-updater": `^${version}` }, projectDir, binary, [Platform.WINDOWS, Platform.MAC])).not.toThrow()
+          expect(() => checkDependencies({ "electron-updater": `^${version}` }, projectDir, { electronUpdaterCompatibility: "^6.9.0 || >=7" }, [Platform.WINDOWS])).not.toThrow()
+        })
+      }
+      await withProjectDir(tmpDir, "6.8.12", projectDir => {
+        expect(() => checkDependencies({ "electron-updater": "^6.8.12" }, projectDir, binary, [Platform.WINDOWS])).toThrow(
+          /electron-updater 6\.8\.12 does not satisfy electronUpdaterCompatibility ">=6\.9\.0" of windows/
+        )
+      })
+      // a range that admits 6.8.x writes the JSON map, which 6.8.x reads
+      await withProjectDir(tmpDir, "6.8.12", projectDir => {
+        expect(() => checkDependencies({ "electron-updater": "^6.8.12" }, projectDir, { electronUpdaterCompatibility: ">=6" }, [Platform.WINDOWS])).not.toThrow()
+      })
     })
 
     test("a declared range that includes the installed version accepts it", async ({ tmpDir }) => {
@@ -222,7 +241,7 @@ describe("checkMetadata electron-updater version validation", () => {
           const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
           expect(() => checkDependencies({ "electron-updater": version }, projectDir, DEFAULT, [Platform.WINDOWS, Platform.MAC, Platform.LINUX])).toThrow(
             new RegExp(
-              `electron-updater ${escaped} cannot read the binary block map the build writes for windows, mac: electron-updater reads it from 7\\.0\\.0-alpha\\.13\\..*"blockmap" to "v2".*v27-build-changes#block-map-format-follows-electronupdatercompatibility`
+              `electron-updater ${escaped} cannot read the binary block map the build writes for windows, mac: electron-updater reads it from 6\\.9\\.0 \\(6\\.x\\) and 7\\.0\\.0-alpha\\.13 \\(7\\)\\..*"blockmap" to "v2".*v27-build-changes#block-map-format-follows-electronupdatercompatibility`
             )
           )
           // Linux publishes no .blockmap file, and "v2" or a range that includes electron-updater 6 writes the JSON map
