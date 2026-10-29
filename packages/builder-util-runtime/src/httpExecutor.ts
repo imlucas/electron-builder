@@ -171,7 +171,7 @@ export abstract class HttpExecutor<T extends Request> {
 
   // noinspection JSUnusedLocalSymbols
   // eslint-disable-next-line
-  protected addRedirectHandlers(request: any, options: RequestOptions, reject: (error: Error) => void, redirectCount: number, handler: (options: RequestOptions) => void) {
+  addRedirectHandlers(request: any, options: RequestOptions, reject: (error: Error) => void, redirectCount: number, handler: (options: RequestOptions) => void) {
     // not required for NodeJS
   }
 

@@ -77,13 +77,7 @@ export class ElectronHttpExecutor extends HttpExecutor<Electron.ClientRequest> {
    * A redirect aborts `request` and `handler` sends a new one to the target. Up to `maxRedirects` redirects are followed; `redirectCount`
    * is the number already followed. A redirect to a protocol other than http(s) is rejected, and so is anything `handler` throws.
    */
-  protected addRedirectHandlers(
-    request: ClientRequest,
-    options: RequestOptions,
-    reject: (error: Error) => void,
-    redirectCount: number,
-    handler: (options: RequestOptions) => void
-  ): void {
+  addRedirectHandlers(request: ClientRequest, options: RequestOptions, reject: (error: Error) => void, redirectCount: number, handler: (options: RequestOptions) => void): void {
     request.on("redirect", (statusCode: number, method: string, redirectUrl: string) => {
       // no way to modify request options, abort old and make a new one
       // https://github.com/electron/electron/issues/11505
